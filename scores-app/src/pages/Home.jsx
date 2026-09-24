@@ -8,6 +8,7 @@ import SectionHeader from '../components/common/SectionHeader'
 import { useMatches } from '../hooks/useMatches'
 import { newsService } from '../services/newsService'
 import { formatFriendlyDateTime, formatRelative } from '../utils/formatDate'
+import { cn } from '../utils/cn'
 
 function getMatchTime(m) {
   if (!m) return 0
@@ -115,14 +116,14 @@ export default function Home() {
             <Trophy className='w-3.5 h-3.5' />
             Club Unión · Bucaramanga
           </span>
-          <h1 className='text-3xl sm:text-5xl font-extrabold tracking-[-0.05em] leading-[1.08] mt-5 max-w-xl'>
+          <h1 className='text-2xl sm:text-5xl font-extrabold tracking-[-0.05em] leading-[1.12] sm:leading-[1.08] mt-3.5 sm:mt-5 max-w-xl'>
             El torneo del club, punto a punto.
           </h1>
-          <p className='text-sm sm:text-base leading-relaxed mt-4 max-w-xl text-white/70'>
+          <p className='text-xs sm:text-base leading-relaxed mt-2.5 sm:mt-4 max-w-xl text-white/70'>
             Consulta marcadores en vivo, resultados del último turno y la programación oficial del torneo.
           </p>
 
-          <div className='flex flex-wrap gap-2.5 mt-7'>
+          <div className='flex flex-wrap gap-2.5 mt-6 sm:mt-7'>
             <Link
               to={live.length > 0 ? '/pantalla' : '/tennis'}
               onClick={() => window.scrollTo(0, 0)}
@@ -145,7 +146,7 @@ export default function Home() {
             </Link>
           </div>
 
-          <div className='flex flex-wrap gap-2.5 mt-8'>
+          <div className='flex flex-wrap gap-2.5 mt-6 sm:mt-8'>
             <HeroStat
               icon={Radio}
               value={ll ? '—' : live.length}
@@ -200,12 +201,20 @@ export default function Home() {
               </Link>
             }
           />
-          <div className='space-y-3'>
+          <div className='flex gap-3 overflow-x-auto pb-2 pt-0.5 snap-x snap-mandatory no-scrollbar sm:grid sm:grid-cols-2 sm:overflow-visible'>
             {ll
               ? Array(2)
                   .fill(0)
-                  .map((_, i) => <MatchCardSkeleton key={i} />)
-              : live.map((m) => <MatchCard key={m.id} match={m} to='/pantalla' />)}
+                  .map((_, i) => (
+                    <div key={i} className='w-[85vw] max-w-[340px] shrink-0 snap-start sm:w-auto sm:max-w-none'>
+                      <MatchCardSkeleton />
+                    </div>
+                  ))
+              : live.map((m) => (
+                  <div key={m.id} className='w-[85vw] max-w-[340px] shrink-0 snap-start sm:w-auto sm:max-w-none'>
+                    <MatchCard match={m} to='/pantalla' compact />
+                  </div>
+                ))}
           </div>
         </section>
       )}
@@ -231,15 +240,23 @@ export default function Home() {
             </Link>
           }
         />
-        <div className='grid grid-cols-1 md:grid-cols-2 gap-3.5'>
+        <div className='flex gap-3 overflow-x-auto pb-2 pt-0.5 snap-x snap-mandatory no-scrollbar sm:grid sm:grid-cols-2 sm:overflow-visible'>
           {lf ? (
             Array(2)
               .fill(0)
-              .map((_, i) => <MatchCardSkeleton key={i} />)
+              .map((_, i) => (
+                <div key={i} className='w-[85vw] max-w-[340px] shrink-0 snap-start sm:w-auto sm:max-w-none'>
+                  <MatchCardSkeleton />
+                </div>
+              ))
           ) : latestSlotMatches.length > 0 ? (
-            latestSlotMatches.map((m) => <MatchCard key={m.id} match={m} compact />)
+            latestSlotMatches.map((m) => (
+              <div key={m.id} className='w-[85vw] max-w-[340px] shrink-0 snap-start sm:w-auto sm:max-w-none'>
+                <MatchCard match={m} compact />
+              </div>
+            ))
           ) : (
-            <div className='card p-6 sm:p-8 text-center space-y-2 col-span-full'>
+            <div className='card p-6 sm:p-8 text-center space-y-2 w-full col-span-full'>
               <div className='w-10 h-10 rounded-full bg-[var(--bg-hover)] text-[var(--text-muted)] flex items-center justify-center mx-auto'>
                 <Clock3 size={20} />
               </div>
@@ -284,13 +301,37 @@ export default function Home() {
             }
           />
           <div className='space-y-3'>
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-3.5'>
+            <div
+              className={cn(
+                isUpcomingExpanded
+                  ? 'grid grid-cols-1 sm:grid-cols-2 gap-3.5'
+                  : 'flex gap-3 overflow-x-auto pb-2 pt-0.5 snap-x snap-mandatory no-scrollbar sm:grid sm:grid-cols-2 sm:overflow-visible'
+              )}
+            >
               {lu
                 ? Array(2)
                     .fill(0)
-                    .map((_, i) => <MatchCardSkeleton key={i} />)
+                    .map((_, i) => (
+                      <div
+                        key={i}
+                        className={cn(
+                          !isUpcomingExpanded &&
+                            'w-[85vw] max-w-[340px] shrink-0 snap-start sm:w-auto sm:max-w-none'
+                        )}
+                      >
+                        <MatchCardSkeleton />
+                      </div>
+                    ))
                 : visibleUpcoming.map((m) => (
-                    <MatchCard key={m.id} match={m} compact />
+                    <div
+                      key={m.id}
+                      className={cn(
+                        !isUpcomingExpanded &&
+                          'w-[85vw] max-w-[340px] shrink-0 snap-start sm:w-auto sm:max-w-none'
+                      )}
+                    >
+                      <MatchCard match={m} compact />
+                    </div>
                   ))}
             </div>
 

@@ -1810,6 +1810,14 @@
   }
 }
 
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @media (max-width: 640px) {
   .auth-card {
     padding: 28px 22px;

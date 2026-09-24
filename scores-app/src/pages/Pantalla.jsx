@@ -116,7 +116,7 @@ export default function Pantalla() {
       }}
     >
       <header
-        className='sticky top-0 z-30 h-[72px] shrink-0 flex items-center justify-between gap-4 px-4 sm:px-7 py-3 backdrop-blur-xl'
+        className='sticky top-0 z-30 h-14 sm:h-[72px] shrink-0 flex items-center justify-between gap-3 sm:gap-4 px-3 sm:px-7 py-2 sm:py-3 backdrop-blur-xl'
         style={{
           backgroundColor: 'rgba(7,17,13,.95)',
           borderBottom: '1px solid rgba(139,203,96,.2)',
@@ -125,22 +125,22 @@ export default function Pantalla() {
         <div className='flex items-center gap-2 sm:gap-3 min-w-0'>
           <Link
             to='/'
-            className='w-10 h-10 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 inline-flex items-center justify-center shrink-0 transition-colors'
+            className='w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 inline-flex items-center justify-center shrink-0 transition-colors'
             aria-label='Regresar a la página principal'
           >
-            <ArrowLeft className='w-5 h-5' />
+            <ArrowLeft className='w-4 h-4 sm:w-5 sm:h-5' />
           </Link>
           <img
             src='/branding/subcomite-tenis-club-union.png'
             alt='Subcomité de Tenis Club Unión'
-            className='w-12 h-12 object-contain shrink-0'
+            className='w-9 h-9 sm:w-12 sm:h-12 object-contain shrink-0'
           />
           <div className='min-w-0'>
-            <p className='font-black truncate'>Marcadores Club Unión</p>
-            <p className='text-xs text-white/55'>Subcomité de Tenis · Bucaramanga</p>
+            <p className='font-black truncate text-xs sm:text-base'>Marcadores Club Unión</p>
+            <p className='text-[10px] sm:text-xs text-white/55 truncate'>Subcomité de Tenis · Bucaramanga</p>
           </div>
         </div>
-        <div className='flex items-center gap-4 shrink-0'>
+        <div className='flex items-center gap-3 sm:gap-4 shrink-0'>
           <a
             href='https://www.instagram.com/legal.branding'
             target='_blank'
@@ -162,7 +162,7 @@ export default function Pantalla() {
         <div className='min-w-0'>
           {/* Barra Sticky de Induleche: Aparece suavemente al hacer scroll y se junta con el header */}
           <div
-            className={`fixed top-[72px] left-0 right-0 lg:right-[260px] z-20 touch-pan-y transition-all duration-200 ease-out ${
+            className={`fixed top-14 sm:top-[72px] left-0 right-0 lg:right-[260px] z-20 touch-pan-y transition-all duration-200 ease-out ${
               isScrolled
                 ? 'opacity-100 translate-y-0 pointer-events-auto'
                 : 'opacity-0 -translate-y-2 pointer-events-none'
@@ -229,9 +229,47 @@ export default function Pantalla() {
             </div>
           </div>
 
-          {/* Banner principal permanente (en el flujo del documento, nunca se destruye ni colapsa al hacer scroll): lado a lado en desktop, stacked en mobile */}
+          {/* Mobile-first: Barra compacta de patrocinador oficial para que el partido en vivo quede visible arriba */}
           <div
-            className='mx-2 sm:mx-7 mt-2 sm:mt-3 mb-3 rounded-2xl sm:rounded-3xl relative overflow-hidden shadow-2xl touch-pan-y'
+            className='block md:hidden mx-2.5 mt-1.5 mb-1.5 rounded-xl px-2.5 py-1.5 relative overflow-hidden shadow-sm'
+            style={{
+              border: '1px solid rgba(255,255,255,.09)',
+              backgroundColor: 'rgba(7, 20, 15, 0.96)',
+            }}
+          >
+            <div className='flex items-center justify-between gap-2'>
+              <a
+                href='https://www.instagram.com/induleche/?hl=es'
+                target='_blank'
+                rel='noreferrer'
+                className='flex items-center gap-2 min-w-0'
+              >
+                <div className='h-6 aspect-[16/9] rounded bg-white p-0.5 shrink-0 flex items-center justify-center'>
+                  <img src={sponsor.image} alt={sponsor.name} className='w-full h-full object-contain' />
+                </div>
+                <div className='min-w-0'>
+                  <span className='uppercase tracking-wider font-extrabold text-[7.5px] text-lime-400 block leading-none'>
+                    Patrocinador oficial
+                  </span>
+                  <span className='font-black text-white text-[11px] truncate block leading-tight mt-0.5'>
+                    {sponsor.name}
+                  </span>
+                </div>
+              </a>
+              <a
+                href='https://www.instagram.com/induleche/?hl=es'
+                target='_blank'
+                rel='noreferrer'
+                className='px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/15 text-[9.5px] font-semibold text-white/80 border border-white/10 shrink-0'
+              >
+                @induleche
+              </a>
+            </div>
+          </div>
+
+          {/* Desktop/TV: Banner principal permanente lado a lado */}
+          <div
+            className='hidden md:block mx-7 mt-3 mb-3 rounded-3xl relative overflow-hidden shadow-2xl touch-pan-y'
             style={{
               border: '1px solid rgba(255,255,255,.08)',
               backgroundColor: 'rgba(7, 20, 15, 0.95)',
@@ -327,7 +365,7 @@ export default function Pantalla() {
             </div>
           </div>
 
-          <section className='p-4 sm:p-7'>
+          <section className='px-3 py-3 sm:p-7'>
             {loadError && (
               <p role='status' className='text-sm text-amber-200 mb-3'>
                 {loadError}
@@ -343,7 +381,7 @@ export default function Pantalla() {
                     <span className='relative w-3 h-3 rounded-full bg-orange-500' />
                   </span>
                 )}
-                <h1 className='font-black text-xl truncate'>
+                <h1 className='font-black text-lg sm:text-xl truncate'>
                   {focusedMatch ? 'Detalle del partido' : 'Jornada de hoy'}
                 </h1>
               </div>
@@ -367,7 +405,7 @@ export default function Pantalla() {
             ) : focusedMatch ? (
               <ScreenMatch match={focusedMatch} featured onBack={() => setFocusedMatchId(null)} />
             ) : (
-              <div className='space-y-8'>
+              <div className='space-y-6 sm:space-y-8'>
                 <MatchGroup
                   title='Partidos en vivo'
                   matches={liveMatches}
@@ -384,6 +422,14 @@ export default function Pantalla() {
               </div>
             )}
           </section>
+
+          {/* Aliados en móvil: ubicados debajo de los resultados para priorizar el marcador */}
+          <div className='block md:hidden mx-3 mb-4 p-3 rounded-2xl bg-white/[.04] border border-white/10'>
+            <p className='text-[9px] uppercase font-bold tracking-wider text-white/50 mb-2.5 text-center'>
+              Aliados y Patrocinadores
+            </p>
+            <MiniSponsorsCarousel sponsors={OTHER_SPONSORS} />
+          </div>
 
           <a
             href='https://www.instagram.com/induleche/?hl=es'
