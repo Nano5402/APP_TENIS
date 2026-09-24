@@ -13,14 +13,26 @@ function getMatchTime(m) {
   if (!m) return 0
   if (m.en_vivo?.finalizado_at) {
     const t = new Date(m.en_vivo.finalizado_at).getTime()
-    if (!isNaN(t)) return t
+    if (!isNaN(t) && t > 0) return t
   }
   if (m.fecha_inicio) {
-    const time = m.hora_inicio || '00:00:00'
-    const t = new Date(`${m.fecha_inicio}T${time}`).getTime()
-    if (!isNaN(t)) return t
+    const dStr = String(m.fecha_inicio).slice(0, 10)
+    const tStr = m.hora_inicio ? String(m.hora_inicio).slice(0, 5) : '00:00'
+    const [year, month, day] = dStr.split('-').map(Number)
+    const [h, min] = tStr.split(':').map(Number)
+    if (year && month && day) {
+      const t = new Date(year, month - 1, day, h || 0, min || 0).getTime()
+      if (!isNaN(t) && t > 0) return t
+    }
   }
   return 0
+}
+
+function getMatchSlotKey(m) {
+  if (!m) return ''
+  const dateStr = m.fecha_inicio ? String(m.fecha_inicio).slice(0, 10) : ''
+  const timeStr = m.hora_inicio ? String(m.hora_inicio).slice(0, 5) : ''
+  return `${dateStr} ${timeStr}`.trim()
 }
 
 export default function Home() {
@@ -51,21 +63,25 @@ export default function Home() {
 
     const mostRecent = sorted[0]
     const mostRecentTime = getMatchTime(mostRecent)
+    const mostRecentSlotKey = getMatchSlotKey(mostRecent)
+    const mostRecentDate = mostRecent.fecha_inicio ? String(mostRecent.fecha_inicio).slice(0, 10) : ''
 
     // Agrupar todos los partidos que concluyeron en ese mismo turno o bloque horario
     const slotMatches = sorted.filter((m) => {
-      // 1. Misma fecha y misma hora asignada (ej. ambos ayer a las 7:30 PM)
-      if (
-        mostRecent.fecha_inicio &&
-        m.fecha_inicio === mostRecent.fecha_inicio &&
-        mostRecent.hora_inicio &&
-        m.hora_inicio === mostRecent.hora_inicio
-      ) {
+      // 1. Mismo turno exacto por fecha y hora (ej. ambos ayer a las 8:00 PM)
+      const mSlotKey = getMatchSlotKey(m)
+      if (mostRecentSlotKey && mSlotKey === mostRecentSlotKey) {
         return true
       }
-      // 2. O finalizados dentro de una ventana de 45 minutos del turno más reciente
-      const t = getMatchTime(m)
-      return mostRecentTime > 0 && t > 0 && Math.abs(mostRecentTime - t) <= 45 * 60 * 1000
+      // 2. Misma fecha y dentro de una ventana de 45 minutos del turno más reciente
+      const mDate = m.fecha_inicio ? String(m.fecha_inicio).slice(0, 10) : ''
+      if (mostRecentDate && mDate === mostRecentDate) {
+        const t = getMatchTime(m)
+        if (mostRecentTime > 0 && t > 0 && Math.abs(mostRecentTime - t) <= 45 * 60 * 1000) {
+          return true
+        }
+      }
+      return false
     })
 
     return { latestSlotMatches: slotMatches, latestMatch: mostRecent }
@@ -74,9 +90,10 @@ export default function Home() {
   // Ordenar los próximos partidos cronológicamente
   const sortedUpcoming = useMemo(() => {
     return [...upcoming].sort((a, b) => {
-      const da = `${a.fecha_inicio || '9999'}T${a.hora_inicio || '99:99'}`
-      const db = `${b.fecha_inicio || '9999'}T${b.hora_inicio || '99:99'}`
-      return da.localeCompare(db) || Number(a.id) - Number(b.id)
+      const ta = getMatchTime(a)
+      const tb = getMatchTime(b)
+      if (ta !== tb) return ta - tb
+      return Number(a.id) - Number(b.id)
     })
   }, [upcoming])
 
