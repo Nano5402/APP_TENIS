@@ -79,7 +79,10 @@ export default function TournamentStandings({ data }) {
           <div className='space-y-2'>
             {rows.map((r) => (
               <article key={r.id} className='rounded-xl p-3 bg-[var(--bg-hover)]'>
-                <div className='flex gap-2 items-center min-w-0'>
+                <div className='flex gap-2.5 items-center min-w-0'>
+                  <span className='font-bold text-base w-6 text-center text-[var(--color-brand)] shrink-0'>
+                    #{r.posicion}
+                  </span>
                   <ParticipantAvatar
                     team={data.modalidad === 'dobles' ? r.participante : null}
                     player={r.participante}
@@ -90,28 +93,32 @@ export default function TournamentStandings({ data }) {
                   </span>
                   <span className='text-right shrink-0'>
                     <strong className='text-lg text-[var(--color-brand)]'>{r.puntos}</strong>
-                    <span className='block text-[10px]'>puntos</span>
+                    <span className='block text-[10px] text-[var(--text-muted)]'>
+                      {r.puntos === 1 ? 'punto' : 'puntos'}
+                    </span>
                   </span>
                 </div>
-                <dl className='grid grid-cols-3 gap-2 mt-3 text-center text-xs'>
+                <dl className='grid grid-cols-5 gap-1 sm:gap-2 mt-3 text-center text-xs'>
                   {[
-                    ['Jugados', r.pj],
-                    ['Ganados', r.pg],
-                    ['Perdidos', r.pp],
+                    ['PJ', r.pj],
+                    ['PG', r.pg],
+                    ['PP', r.pp],
+                    ['% Sets', r.sets_jugados > 0 ? `${(r.ratio_sets * 100).toFixed(1)}%` : '—'],
+                    ['% Games', r.games_jugados > 0 ? `${(r.ratio_games * 100).toFixed(1)}%` : '—'],
                   ].map(([label, value]) => (
-                    <div key={label}>
-                      <dt className='text-[var(--text-muted)]'>{label}</dt>
-                      <dd className='font-bold mt-1'>{value}</dd>
+                    <div key={label} className='p-1.5 rounded-lg bg-[var(--bg-card)]'>
+                      <dt className='text-[var(--text-muted)] text-[10px]'>{label}</dt>
+                      <dd className='font-bold mt-0.5 text-xs'>{value}</dd>
                     </div>
                   ))}
                 </dl>
                 <details className='mt-2 text-xs'>
-                  <summary className='cursor-pointer text-[var(--text-secondary)]'>
-                    Sets y juegos
+                  <summary className='cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]'>
+                    Detalle de sets y games
                   </summary>
-                  <p className='pt-2'>
-                    Sets: {r.sets_ganados || 0} ganados / {r.sets_perdidos || 0} perdidos · Juegos:{' '}
-                    {r.games_favor || 0} a favor / {r.games_contra || 0} en contra
+                  <p className='pt-1.5 text-[var(--text-muted)]'>
+                    Sets: {r.sets_ganados || 0} ganados / {r.sets_perdidos || 0} perdidos ({r.sets_jugados || 0} jugados) · Games:{' '}
+                    {r.games_favor || 0} a favor / {r.games_contra || 0} en contra ({r.games_jugados || 0} jugados)
                   </p>
                 </details>
               </article>
@@ -120,9 +127,7 @@ export default function TournamentStandings({ data }) {
         )}
       </section>
       <p className='text-xs text-[var(--text-muted)]'>
-        Balance orientativo: 2 puntos por victoria y 1 por derrota. Solo cuentan partidos
-        finalizados con ganador de esta fase y grupo. No declara clasificados; el reglamento y los
-        desempates oficiales están por confirmar.
+        Criterio oficial: 1 punto al ganador y 0 al perdedor. En caso de empate se define por efectividad de sets (% sets ganados/jugados), efectividad de games (% games favor/jugados) y enfrentamiento directo. Los supertiebreaks se computan como 1 game y 1 set.
       </p>
       {!!data.sin_grupo?.length && (
         <details className='card p-4'>

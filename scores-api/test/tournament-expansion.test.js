@@ -103,7 +103,7 @@ test('posiciones separa categorías del mismo grupo, no suma finalizados sin gan
   })
   const r = await svc.getByTorneo(1)
   assert.equal(r.nombres_grupos.length, 2)
-  assert.equal(r.grupos['Damas · A'][0].puntos, 2)
+  assert.equal(r.grupos['Damas · A'][0].puntos, 1)
   assert.equal(r.grupos['Quinta · A'][0].pj, 0)
 })
 test('compatibilidad conserva INT UNSIGNED y lecturas por destinatario', async () => {

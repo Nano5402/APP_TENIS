@@ -171,10 +171,14 @@ exports.getByTorneo = async (torneoId) => {
     pp: 0,
     sets_ganados: 0,
     sets_perdidos: 0,
+    sets_jugados: 0,
     dif_sets: 0,
+    ratio_sets: 0,
     games_favor: 0,
     games_contra: 0,
+    games_jugados: 0,
     dif_games: 0,
+    ratio_games: 0,
     puntos: 0,
   })
 
@@ -201,17 +205,15 @@ exports.getByTorneo = async (torneoId) => {
     p1Stats.pj++
     p2Stats.pj++
 
-    // Determine winner
+    // Determine winner: 1 punto al ganador, 0 al perdedor
     if (p.ganador === 'jugador1') {
       p1Stats.pg++
-      p1Stats.puntos += 2
+      p1Stats.puntos += 1
       p2Stats.pp++
-      p2Stats.puntos += 1
     } else if (p.ganador === 'jugador2') {
       p2Stats.pg++
-      p2Stats.puntos += 2
+      p2Stats.puntos += 1
       p1Stats.pp++
-      p1Stats.puntos += 1
     }
 
     // Process sets
@@ -220,10 +222,16 @@ exports.getByTorneo = async (torneoId) => {
       const g1 = Number(s.games_j1 || 0)
       const g2 = Number(s.games_j2 || 0)
 
-      p1Stats.games_favor += g1
-      p1Stats.games_contra += g2
-      p2Stats.games_favor += g2
-      p2Stats.games_contra += g1
+      // Regla de supertiebreak (10 o más puntos):
+      // Cuenta como 1 game para el ganador y 0 para el perdedor (total 1 game jugado y 1 set)
+      const isSTB = g1 >= 10 || g2 >= 10
+      const g1Stats = isSTB ? (g1 > g2 ? 1 : 0) : g1
+      const g2Stats = isSTB ? (g2 > g1 ? 1 : 0) : g2
+
+      p1Stats.games_favor += g1Stats
+      p1Stats.games_contra += g2Stats
+      p2Stats.games_favor += g2Stats
+      p2Stats.games_contra += g1Stats
 
       if (g1 > g2) {
         p1Stats.sets_ganados++
@@ -234,17 +242,36 @@ exports.getByTorneo = async (torneoId) => {
       }
     })
 
+    p1Stats.sets_jugados = p1Stats.sets_ganados + p1Stats.sets_perdidos
+    p1Stats.ratio_sets = p1Stats.sets_jugados > 0 ? p1Stats.sets_ganados / p1Stats.sets_jugados : 0
+    p1Stats.games_jugados = p1Stats.games_favor + p1Stats.games_contra
+    p1Stats.ratio_games = p1Stats.games_jugados > 0 ? p1Stats.games_favor / p1Stats.games_jugados : 0
     p1Stats.dif_sets = p1Stats.sets_ganados - p1Stats.sets_perdidos
     p1Stats.dif_games = p1Stats.games_favor - p1Stats.games_contra
+
+    p2Stats.sets_jugados = p2Stats.sets_ganados + p2Stats.sets_perdidos
+    p2Stats.ratio_sets = p2Stats.sets_jugados > 0 ? p2Stats.sets_ganados / p2Stats.sets_jugados : 0
+    p2Stats.games_jugados = p2Stats.games_favor + p2Stats.games_contra
+    p2Stats.ratio_games = p2Stats.games_jugados > 0 ? p2Stats.games_favor / p2Stats.games_jugados : 0
     p2Stats.dif_sets = p2Stats.sets_ganados - p2Stats.sets_perdidos
     p2Stats.dif_games = p2Stats.games_favor - p2Stats.games_contra
   }
 
+  // Mapa de enfrentamientos directos (Head-to-Head)
+  const directMatchups = new Map()
+
   // Aggregate stats from finished matches
   finishedPartidos.forEach((p) => {
-    const p1 = p.p1_id
-    const p2 = p.p2_id
+    const p1 = Number(p.p1_id)
+    const p2 = Number(p.p2_id)
     if (!p1 || !p2) return
+
+    // Registrar ganador del enfrentamiento directo entre ambos participantes
+    if (['jugador1', 'jugador2'].includes(p.ganador)) {
+      const winnerId = p.ganador === 'jugador1' ? p1 : p2
+      const mKey = p1 < p2 ? `${p1}_${p2}` : `${p2}_${p1}`
+      directMatchups.set(mKey, winnerId)
+    }
 
     // Apply to global stats
     if (globalStats.has(p1) && globalStats.has(p2)) {
@@ -261,24 +288,125 @@ exports.getByTorneo = async (torneoId) => {
     }
   })
 
-  // Sorter function: points DESC, PG DESC, dif_sets DESC, dif_games DESC, games_favor DESC
+  // Sorter function:
+  // 1. Puntos totales DESC
+  // 2. Empate entre 2: Ratio Sets DESC -> Ratio Games DESC -> Enfrentamiento directo
+  // 3. Triple empate: Mejor Ratio Games pasa directo (1°); desempate de los 2 restantes por Enfrentamiento directo
   const sortStandings = (list) => {
-    return list
-      .sort((a, b) => {
-        if (b.puntos !== a.puntos) return b.puntos - a.puntos
-        if (b.pg !== a.pg) return b.pg - a.pg
-        if (b.dif_sets !== a.dif_sets) return b.dif_sets - a.dif_sets
-        if (b.dif_games !== a.dif_games) return b.dif_games - a.dif_games
-        return (
-          b.games_favor - a.games_favor ||
+    const pointsMap = new Map()
+    for (const entry of list) {
+      const pts = Number(entry.puntos || 0)
+      if (!pointsMap.has(pts)) pointsMap.set(pts, [])
+      pointsMap.get(pts).push(entry)
+    }
+
+    const sortedPoints = Array.from(pointsMap.keys()).sort((a, b) => b - a)
+    const result = []
+
+    for (const pts of sortedPoints) {
+      const cluster = pointsMap.get(pts)
+
+      // Un solo participante con este puntaje
+      if (cluster.length === 1) {
+        result.push(cluster[0])
+        continue
+      }
+
+      // Empate entre 2 participantes
+      if (cluster.length === 2) {
+        const [a, b] = cluster
+        // Criterio 1: Ratio de sets ganados sobre jugados
+        const diffSets = (b.ratio_sets || 0) - (a.ratio_sets || 0)
+        if (Math.abs(diffSets) > 1e-6) {
+          result.push(diffSets > 0 ? b : a, diffSets > 0 ? a : b)
+          continue
+        }
+
+        // Criterio 2: Ratio de games ganados sobre jugados
+        const diffGames = (b.ratio_games || 0) - (a.ratio_games || 0)
+        if (Math.abs(diffGames) > 1e-6) {
+          result.push(diffGames > 0 ? b : a, diffGames > 0 ? a : b)
+          continue
+        }
+
+        // Criterio 3: Enfrentamiento directo entre ambos
+        const mKey = a.id < b.id ? `${a.id}_${b.id}` : `${b.id}_${a.id}`
+        const winnerId = directMatchups.get(mKey)
+        if (winnerId === a.id) {
+          result.push(a, b)
+          continue
+        } else if (winnerId === b.id) {
+          result.push(b, a)
+          continue
+        }
+
+        // Desempate técnico final si todo es idéntico
+        const fallback =
+          (b.dif_sets - a.dif_sets) ||
+          (b.dif_games - a.dif_games) ||
+          (b.games_favor - a.games_favor) ||
           a.participante.nombre.localeCompare(b.participante.nombre, 'es') ||
-          a.id - b.id
+          (a.id - b.id)
+        result.push(fallback > 0 ? b : a, fallback > 0 ? a : b)
+        continue
+      }
+
+      // Triple empate (3 participantes con el mismo puntaje)
+      if (cluster.length === 3) {
+        // Evaluar ratio de games ganados sobre jugados
+        const byGames = [...cluster].sort((x, y) => (y.ratio_games || 0) - (x.ratio_games || 0))
+        const top = byGames[0]
+        const second = byGames[1]
+        const third = byGames[2]
+
+        // El que tenga mayor porcentaje entre los 3 pasa directo
+        if ((top.ratio_games || 0) - (second.ratio_games || 0) > 1e-6) {
+          // Desempate de los 2 restantes por su enfrentamiento directo mutuo
+          const mKey = second.id < third.id ? `${second.id}_${third.id}` : `${third.id}_${second.id}`
+          const winnerId = directMatchups.get(mKey)
+          if (winnerId === third.id) {
+            result.push(top, third, second)
+          } else {
+            result.push(top, second, third)
+          }
+          continue
+        }
+
+        // Si los 3 empatan también en ratio_games o top empata con el 2do:
+        cluster.sort((x, y) => {
+          if (Math.abs((y.ratio_sets || 0) - (x.ratio_sets || 0)) > 1e-6) return (y.ratio_sets || 0) - (x.ratio_sets || 0)
+          if (Math.abs((y.ratio_games || 0) - (x.ratio_games || 0)) > 1e-6) return (y.ratio_games || 0) - (x.ratio_games || 0)
+          if (y.dif_sets !== x.dif_sets) return y.dif_sets - x.dif_sets
+          if (y.dif_games !== x.dif_games) return y.dif_games - x.dif_games
+          return (
+            (y.games_favor - x.games_favor) ||
+            x.participante.nombre.localeCompare(y.participante.nombre, 'es') ||
+            (x.id - y.id)
+          )
+        })
+        result.push(...cluster)
+        continue
+      }
+
+      // Más de 3 participantes empatados
+      cluster.sort((x, y) => {
+        if (Math.abs((y.ratio_sets || 0) - (x.ratio_sets || 0)) > 1e-6) return (y.ratio_sets || 0) - (x.ratio_sets || 0)
+        if (Math.abs((y.ratio_games || 0) - (x.ratio_games || 0)) > 1e-6) return (y.ratio_games || 0) - (x.ratio_games || 0)
+        if (y.dif_sets !== x.dif_sets) return y.dif_sets - x.dif_sets
+        if (y.dif_games !== x.dif_games) return y.dif_games - x.dif_games
+        return (
+          (y.games_favor - x.games_favor) ||
+          x.participante.nombre.localeCompare(y.participante.nombre, 'es') ||
+          (x.id - y.id)
         )
       })
-      .map((entry, idx) => ({
-        posicion: idx + 1,
-        ...entry,
-      }))
+      result.push(...cluster)
+    }
+
+    return result.map((entry, idx) => ({
+      posicion: idx + 1,
+      ...entry,
+    }))
   }
 
   // Format global standings
