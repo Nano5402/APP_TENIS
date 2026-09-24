@@ -573,58 +573,59 @@ export default function JuezPartidos() {
 
           {/* Sección Modo Práctica / Partido de Prueba para Jueces */}
           <div
-            className='p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm'
+            className='p-4 sm:p-5 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm'
             style={{
-              backgroundColor: 'rgba(234, 179, 8, 0.05)',
-              borderColor: 'rgba(234, 179, 8, 0.25)',
+              backgroundColor: 'var(--bg-card)',
+              borderColor: 'var(--border-color)',
             }}
           >
-            <div className='flex items-start gap-3'>
-              <div className='p-2.5 rounded-xl bg-amber-500/10 text-amber-400 shrink-0 mt-0.5'>
-                <Sparkles size={20} />
+            <div className='flex items-start gap-3.5'>
+              <div
+                className='p-3 rounded-xl flex items-center justify-center shrink-0 mt-0.5'
+                style={{
+                  backgroundColor: 'var(--color-brand-dim)',
+                  color: 'var(--color-brand)',
+                }}
+              >
+                <Sparkles size={22} />
               </div>
               <div>
-                <div className='flex items-center gap-2'>
-                  <h2 className='text-sm font-bold text-amber-300'>Modo Práctica para Jueces</h2>
-                  <span className='text-[10px] px-2 py-0.5 rounded-full font-semibold bg-amber-500/20 text-amber-300'>
+                <div className='flex flex-wrap items-center gap-2'>
+                  <h2 className='text-sm sm:text-base font-bold' style={{ color: 'var(--text-primary)' }}>
+                    Modo Práctica para Jueces
+                  </h2>
+                  <span
+                    className='text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider'
+                    style={{
+                      backgroundColor: 'var(--color-brand-dim)',
+                      color: 'var(--color-brand)',
+                      border: '1px solid var(--border-color)',
+                    }}
+                  >
                     Entrenamiento
                   </span>
                 </div>
-                <p className='text-xs text-[var(--text-muted)] mt-0.5 max-w-xl'>
-                  Inicia un partido de prueba virtual para practicar el arbitraje, conteo de puntos, desempates y uso de la mesa. No se guarda en la base de datos, no afecta estadísticas ni aparecerá en la programación pública.
+                <p className='text-xs mt-1 max-w-xl leading-relaxed' style={{ color: 'var(--text-muted)' }}>
+                  Inicia un partido de prueba interactivo para practicar el arbitraje, conteo de puntos, desempates y uso de la mesa. No se guarda en la base de datos, no afecta estadísticas ni aparecerá en la programación pública.
                 </p>
               </div>
             </div>
 
-            <div className='flex items-center gap-2 shrink-0'>
+            <div className='flex flex-wrap items-center gap-2.5 shrink-0'>
               <button
                 type='button'
                 onClick={() => startPracticeMatch(false)}
-                className='px-3.5 py-2 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm'
-                style={{
-                  backgroundColor: 'var(--bg-card)',
-                  border: '1px solid rgba(234, 179, 8, 0.4)',
-                  color: 'var(--text-primary)',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#eab308')}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'rgba(234, 179, 8, 0.4)')}
+                className='btn-secondary text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-sm'
               >
-                <User size={14} className='text-amber-400' />
+                <User size={15} style={{ color: 'var(--color-brand)' }} />
                 <span>Práctica Individual</span>
               </button>
               <button
                 type='button'
                 onClick={() => startPracticeMatch(true)}
-                className='px-3.5 py-2 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm'
-                style={{
-                  backgroundColor: 'rgba(234, 179, 8, 0.15)',
-                  border: '1px solid rgba(234, 179, 8, 0.5)',
-                  color: '#fef08a',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(234, 179, 8, 0.25)')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(234, 179, 8, 0.15)')}
+                className='btn-primary text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-sm'
               >
-                <Users size={14} className='text-amber-400' />
+                <Users size={15} />
                 <span>Práctica Dobles</span>
               </button>
             </div>
@@ -1055,19 +1056,25 @@ export default function JuezPartidos() {
       ) : (
         <section className='judge-desk' aria-label='Control del partido'>
           {isPractice && (
-            <div className='flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs sm:text-sm font-medium mb-3 shadow-sm'>
+            <div
+              className='flex items-center justify-between p-3.5 rounded-xl border mb-3 shadow-sm'
+              style={{
+                backgroundColor: 'var(--color-brand-dim)',
+                borderColor: 'var(--border-hover)',
+              }}
+            >
               <div className='flex items-center gap-2.5'>
-                <Sparkles size={18} className='text-amber-400 shrink-0' />
-                <span>
-                  <strong>MODO PRÁCTICA:</strong> Partido virtual de entrenamiento ({match?.modalidad === 'dobles' ? 'Dobles' : 'Individual'}). No se guarda en la base de datos ni afecta estadísticas.
+                <Sparkles size={18} style={{ color: 'var(--color-brand)' }} className='shrink-0' />
+                <span className='text-xs sm:text-sm font-medium' style={{ color: 'var(--text-primary)' }}>
+                  <strong style={{ color: 'var(--color-brand)' }}>MODO PRÁCTICA:</strong> Partido virtual de entrenamiento ({match?.modalidad === 'dobles' ? 'Dobles' : 'Individual'}). No se guarda en base de datos ni afecta estadísticas.
                 </span>
               </div>
               <button
                 type='button'
                 onClick={exitPractice}
-                className='ml-3 px-3 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-semibold whitespace-nowrap'
+                className='btn-secondary text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm shrink-0 ml-3'
               >
-                Salir
+                Salir de práctica
               </button>
             </div>
           )}
@@ -1117,7 +1124,8 @@ export default function JuezPartidos() {
             {isPractice && (
               <button
                 type='button'
-                className='judge-tool text-amber-400 hover:text-amber-300'
+                className='judge-tool font-semibold'
+                style={{ color: 'var(--color-brand)' }}
                 onClick={() => startPracticeMatch(match?.modalidad === 'dobles')}
                 title='Reiniciar partido de prueba desde cero'
               >
