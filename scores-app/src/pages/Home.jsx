@@ -1,19 +1,36 @@
 import { Link } from 'react-router-dom'
-import { CalendarDays, ChevronRight, History, Radio, Trophy } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { CalendarDays, ChevronDown, ChevronRight, ChevronUp, Clock3, History, Radio, Trophy } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
 import MatchCard from '../components/match/MatchCard'
 import SponsorsCarousel from '../components/sponsors/SponsorsCarousel'
 import { MatchCardSkeleton } from '../components/ui/Skeleton'
 import SectionHeader from '../components/common/SectionHeader'
 import { useMatches } from '../hooks/useMatches'
 import { newsService } from '../services/newsService'
-import { formatRelative } from '../utils/formatDate'
+import { formatFriendlyDateTime, formatRelative } from '../utils/formatDate'
+
+function getMatchTime(m) {
+  if (!m) return 0
+  if (m.en_vivo?.finalizado_at) {
+    const t = new Date(m.en_vivo.finalizado_at).getTime()
+    if (!isNaN(t)) return t
+  }
+  if (m.fecha_inicio) {
+    const time = m.hora_inicio || '00:00:00'
+    const t = new Date(`${m.fecha_inicio}T${time}`).getTime()
+    if (!isNaN(t)) return t
+  }
+  return 0
+}
 
 export default function Home() {
   const { matches: live, loading: ll } = useMatches({ estado: 'en_vivo' })
+  const { matches: finished, loading: lf } = useMatches({ estado: 'finalizado' })
   const { matches: upcoming, loading: lu } = useMatches({ estado: 'programado' })
-  const { matches: finished } = useMatches({ estado: 'finalizado' })
   const [news, setNews] = useState([])
+  const [isUpcomingExpanded, setIsUpcomingExpanded] = useState(false)
+
+  const INITIAL_UPCOMING_COUNT = 2
 
   useEffect(() => {
     newsService
@@ -21,6 +38,55 @@ export default function Home() {
       .then((r) => setNews(r.data?.slice(0, 4) || []))
       .catch(() => {})
   }, [])
+
+  // Agrupar los partidos concluidos del último turno/hora jugado
+  const { latestSlotMatches, latestMatch } = useMemo(() => {
+    if (!finished.length) return { latestSlotMatches: [], latestMatch: null }
+
+    const sorted = [...finished].sort((a, b) => {
+      const tb = getMatchTime(b)
+      const ta = getMatchTime(a)
+      return tb - ta || Number(b.id) - Number(a.id)
+    })
+
+    const mostRecent = sorted[0]
+    const mostRecentTime = getMatchTime(mostRecent)
+
+    // Agrupar todos los partidos que concluyeron en ese mismo turno o bloque horario
+    const slotMatches = sorted.filter((m) => {
+      // 1. Misma fecha y misma hora asignada (ej. ambos ayer a las 7:30 PM)
+      if (
+        mostRecent.fecha_inicio &&
+        m.fecha_inicio === mostRecent.fecha_inicio &&
+        mostRecent.hora_inicio &&
+        m.hora_inicio === mostRecent.hora_inicio
+      ) {
+        return true
+      }
+      // 2. O finalizados dentro de una ventana de 45 minutos del turno más reciente
+      const t = getMatchTime(m)
+      return mostRecentTime > 0 && t > 0 && Math.abs(mostRecentTime - t) <= 45 * 60 * 1000
+    })
+
+    return { latestSlotMatches: slotMatches, latestMatch: mostRecent }
+  }, [finished])
+
+  // Ordenar los próximos partidos cronológicamente
+  const sortedUpcoming = useMemo(() => {
+    return [...upcoming].sort((a, b) => {
+      const da = `${a.fecha_inicio || '9999'}T${a.hora_inicio || '99:99'}`
+      const db = `${b.fecha_inicio || '9999'}T${b.hora_inicio || '99:99'}`
+      return da.localeCompare(db) || Number(a.id) - Number(b.id)
+    })
+  }, [upcoming])
+
+  const visibleUpcoming = isUpcomingExpanded
+    ? sortedUpcoming
+    : sortedUpcoming.slice(0, INITIAL_UPCOMING_COUNT)
+
+  const slotFriendlyLabel = latestMatch
+    ? formatFriendlyDateTime(latestMatch.fecha_inicio, latestMatch.hora_inicio)
+    : ''
 
   return (
     <div className='space-y-8 animate-fade-up'>
@@ -36,7 +102,7 @@ export default function Home() {
             El torneo del club, punto a punto.
           </h1>
           <p className='text-sm sm:text-base leading-relaxed mt-4 max-w-xl text-white/70'>
-            Consulta marcadores en vivo, próximos encuentros y resultados de todas las categorías.
+            Consulta marcadores en vivo, resultados del último turno y la programación oficial del torneo.
           </p>
 
           <div className='flex flex-wrap gap-2.5 mt-7'>
@@ -46,7 +112,7 @@ export default function Home() {
               style={{ backgroundColor: 'var(--club-green-light)', color: 'var(--club-green-dark)' }}
             >
               <Radio className='w-4 h-4' />
-              {live.length > 0 ? 'Ver partidos en vivo' : 'Explorar partidos'}
+              {live.length > 0 ? 'Ver partidos en vivo' : 'Ver programación en Tenis'}
             </Link>
             <Link
               to='/tennis'
@@ -56,7 +122,7 @@ export default function Home() {
                 border: '1px solid rgba(255,255,255,.14)',
               }}
             >
-              Ver historial
+              Ver historial completo
               <ChevronRight className='w-4 h-4' />
             </Link>
           </div>
@@ -69,21 +135,22 @@ export default function Home() {
               accent='var(--club-clay)'
             />
             <HeroStat
-              icon={CalendarDays}
-              value={lu ? '—' : upcoming.length}
-              label='Próximos'
+              icon={Clock3}
+              value={lf ? '—' : latestSlotMatches.length}
+              label='Último turno'
               accent='var(--club-green-light)'
             />
             <HeroStat
-              icon={History}
-              value={finished.length}
-              label='Resultados'
+              icon={CalendarDays}
+              value={lu ? '—' : upcoming.length}
+              label='Próximos'
               accent='var(--club-white)'
             />
           </div>
         </div>
       </section>
 
+      {/* Partidos en Vivo (si los hay) */}
       {(ll || live.length > 0) && (
         <section>
           <SectionHeader
@@ -109,13 +176,122 @@ export default function Home() {
         </section>
       )}
 
-      {finished[0] && (
+      {/* Últimos Resultados (partidos del último turno/hora jugado) */}
+      <section>
+        <SectionHeader
+          title='Últimos resultados'
+          subtitle={
+            lf
+              ? 'Cargando marcadores…'
+              : latestSlotMatches.length > 0 && slotFriendlyLabel
+              ? `Turno finalizado: ${slotFriendlyLabel} (${latestSlotMatches.length} partido${latestSlotMatches.length === 1 ? '' : 's'})`
+              : 'Resultados más recientes'
+          }
+          action={
+            <Link
+              to='/tennis'
+              className='flex items-center gap-1 text-xs font-medium'
+              style={{ color: 'var(--color-brand)' }}
+            >
+              Ver historial completo <ChevronRight className='w-3.5 h-3.5' />
+            </Link>
+          }
+        />
+        <div className='space-y-3'>
+          {lf ? (
+            Array(2)
+              .fill(0)
+              .map((_, i) => <MatchCardSkeleton key={i} />)
+          ) : latestSlotMatches.length > 0 ? (
+            latestSlotMatches.map((m) => <MatchCard key={m.id} match={m} />)
+          ) : (
+            <div className='card p-6 sm:p-8 text-center space-y-2'>
+              <div className='w-10 h-10 rounded-full bg-[var(--bg-hover)] text-[var(--text-muted)] flex items-center justify-center mx-auto'>
+                <Clock3 size={20} />
+              </div>
+              <p className='text-sm font-bold text-[var(--text-primary)]'>
+                Sin resultados recientes
+              </p>
+              <p className='text-xs text-[var(--text-muted)] max-w-sm mx-auto'>
+                Aún no hay partidos finalizados o puedes consultar todos los resultados en el historial.
+              </p>
+              <div className='pt-2'>
+                <Link
+                  to='/tennis'
+                  className='inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[var(--bg-hover)] text-[var(--text-primary)] hover:border-[var(--color-brand)] border border-[var(--border-color)] transition-all'
+                >
+                  <History size={14} className='text-[var(--color-brand)]' />
+                  Ver resultados anteriores en Tenis
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Próximos Partidos (con control de espacio y botón Expandir / Recoger) */}
+      {(lu || sortedUpcoming.length > 0) && (
         <section>
-          <SectionHeader title='Último resultado' />
-          <MatchCard match={finished[0]} />
+          <SectionHeader
+            title='Próximos partidos'
+            subtitle={
+              !lu
+                ? `${sortedUpcoming.length} partido${sortedUpcoming.length === 1 ? '' : 's'} programado${sortedUpcoming.length === 1 ? '' : 's'}`
+                : 'Cargando programación…'
+            }
+            action={
+              <Link
+                to='/tennis'
+                className='flex items-center gap-1 text-xs font-medium'
+                style={{ color: 'var(--color-brand)' }}
+              >
+                Ver programación completa <ChevronRight className='w-3.5 h-3.5' />
+              </Link>
+            }
+          />
+          <div className='space-y-3'>
+            {lu ? (
+              Array(2)
+                .fill(0)
+                .map((_, i) => <MatchCardSkeleton key={i} />)
+            ) : sortedUpcoming.length > 0 ? (
+              <>
+                {visibleUpcoming.map((m) => (
+                  <MatchCard key={m.id} match={m} />
+                ))}
+
+                {sortedUpcoming.length > INITIAL_UPCOMING_COUNT && (
+                  <button
+                    type='button'
+                    onClick={() => setIsUpcomingExpanded(!isUpcomingExpanded)}
+                    className='w-full py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all border border-[var(--border-color)] bg-[var(--bg-hover)] text-[var(--text-primary)] hover:border-[var(--color-brand)] shadow-sm'
+                  >
+                    {isUpcomingExpanded ? (
+                      <>
+                        <span>Recoger próximos partidos</span>
+                        <ChevronUp className='w-4 h-4 text-[var(--color-brand)]' />
+                      </>
+                    ) : (
+                      <>
+                        <span>
+                          Ver más próximos partidos (+{sortedUpcoming.length - INITIAL_UPCOMING_COUNT} restantes)
+                        </span>
+                        <ChevronDown className='w-4 h-4 text-[var(--color-brand)]' />
+                      </>
+                    )}
+                  </button>
+                )}
+              </>
+            ) : (
+              <div className='card p-6 text-center text-xs' style={{ color: 'var(--text-muted)' }}>
+                No hay partidos programados próximamente.
+              </div>
+            )}
+          </div>
         </section>
       )}
 
+      {/* Anuncios del Club */}
       {news.length > 0 && (
         <section>
           <SectionHeader title='Anuncios del club' />
@@ -127,29 +303,29 @@ export default function Home() {
         </section>
       )}
 
-      {(lu || upcoming.length > 0) && (
-        <section>
-          <SectionHeader
-            title='Próximos partidos'
-            action={
-              <Link
-                to='/tennis'
-                className='flex items-center gap-1 text-xs font-medium'
-                style={{ color: 'var(--color-brand)' }}
-              >
-                Ver todos <ChevronRight className='w-3.5 h-3.5' />
-              </Link>
-            }
-          />
-          <div className='space-y-3'>
-            {lu
-              ? Array(2)
-                  .fill(0)
-                  .map((_, i) => <MatchCardSkeleton key={i} />)
-              : upcoming.map((m) => <MatchCard key={m.id} match={m} />)}
+      {/* Acceso Rápido a Programación y Fixtures */}
+      <section className='card p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border border-[var(--border-color)]'>
+        <div className='flex items-center gap-3'>
+          <div className='w-9 h-9 rounded-xl bg-[var(--color-brand)]/10 text-[var(--color-brand)] flex items-center justify-center shrink-0'>
+            <CalendarDays size={18} />
           </div>
-        </section>
-      )}
+          <div>
+            <h3 className='text-sm font-bold text-[var(--text-primary)]'>
+              Programación por canchas y fixture completo
+            </h3>
+            <p className='text-xs text-[var(--text-muted)]'>
+              Consulta los horarios, canchas asignadas y cuadros de eliminatorias en Tenis.
+            </p>
+          </div>
+        </div>
+        <Link
+          to='/tennis'
+          className='btn-primary text-xs px-4 py-2.5 rounded-xl shrink-0 whitespace-nowrap font-bold flex items-center gap-1.5'
+        >
+          <span>Ir a Tenis</span>
+          <ChevronRight size={14} />
+        </Link>
+      </section>
     </div>
   )
 }

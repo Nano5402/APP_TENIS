@@ -40,7 +40,7 @@ const row = ({
   games_j2: games2,
 })
 
-test('asigna 3-0 cuando el ganador no cede sets', () => {
+test('asigna 1-0 oficial de puntos y computa games normales cuando no hay supertiebreak', () => {
   const stats = calculatePlayerStats([
     row({
       partido: 1,
@@ -65,13 +65,17 @@ test('asigna 3-0 cuando el ganador no cede sets', () => {
   const winner = stats.find((entry) => entry.jugador_id === 10)
   const loser = stats.find((entry) => entry.jugador_id === 11)
 
-  assert.equal(winner.puntos, 3)
+  assert.equal(winner.puntos, 1)
   assert.equal(winner.victorias, 1)
+  assert.equal(winner.games_ganados, 12)
+  assert.equal(winner.games_perdidos, 6)
   assert.equal(loser.puntos, 0)
   assert.equal(loser.derrotas, 1)
+  assert.equal(loser.games_ganados, 6)
+  assert.equal(loser.games_perdidos, 12)
 })
 
-test('asigna 2-1 cuando el perdedor gana un set', () => {
+test('regla de supertiebreak computa 1-0 games y 1-0 puntos oficiales', () => {
   const stats = calculatePlayerStats([
     row({
       partido: 2,
@@ -98,17 +102,24 @@ test('asigna 2-1 cuando el perdedor gana un set', () => {
       ganador: 'jugador2',
       set: 3,
       games1: 8,
-      games2: 10,
+      games2: 10, // Supertiebreak decisivo
     }),
   ])
 
   const winner = stats.find((entry) => entry.jugador_id === 21)
   const loser = stats.find((entry) => entry.jugador_id === 20)
 
-  assert.equal(winner.puntos, 2)
-  assert.equal(loser.puntos, 1)
+  assert.equal(winner.puntos, 1)
+  assert.equal(loser.puntos, 0)
   assert.equal(winner.sets_ganados, 2)
   assert.equal(loser.sets_ganados, 1)
+  // Supertiebreak 8-10 cuenta como 1 game para el ganador (21) y 0 para el perdedor (20)
+  // Ganador (21): 4 + 6 + 1 = 11 games ganados, 6 + 3 + 0 = 9 games perdidos
+  assert.equal(winner.games_ganados, 11)
+  assert.equal(winner.games_perdidos, 9)
+  // Perdedor (20): 6 + 3 + 0 = 9 games ganados, 4 + 6 + 1 = 11 games perdidos
+  assert.equal(loser.games_ganados, 9)
+  assert.equal(loser.games_perdidos, 11)
 })
 
 test('calcula rankings independientes para cada categoría', () => {

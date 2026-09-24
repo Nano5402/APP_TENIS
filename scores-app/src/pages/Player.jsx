@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -72,12 +72,62 @@ export default function Player() {
     )
   }
 
-  const statsByCategory = player.estadisticas || []
+  const statsByCategory = useMemo(() => player.estadisticas || [], [player])
+
+  // Consolidado General (Todas las categorías y parejas integradas)
+  const generalStats = useMemo(() => {
+    if (!statsByCategory.length) return null
+    const pj = statsByCategory.reduce((acc, s) => acc + (s.partidos_jugados || 0), 0)
+    const v = statsByCategory.reduce((acc, s) => acc + (s.victorias || 0), 0)
+    const d = statsByCategory.reduce((acc, s) => acc + (s.derrotas || 0), 0)
+    const pts = statsByCategory.reduce((acc, s) => acc + (s.puntos || 0), 0)
+    const sg = statsByCategory.reduce((acc, s) => acc + (s.sets_ganados || 0), 0)
+    const sp = statsByCategory.reduce((acc, s) => acc + (s.sets_perdidos || 0), 0)
+    const gg = statsByCategory.reduce((acc, s) => acc + (s.games_ganados || 0), 0)
+    const gp = statsByCategory.reduce((acc, s) => acc + (s.games_perdidos || 0), 0)
+    const totalSets = sg + sp
+    const totalGames = gg + gp
+
+    return {
+      jugador_id: player.id,
+      categoria: {
+        id: 'todas',
+        nombre: 'Todas las categorías (General)',
+      },
+      ranking: null,
+      partidos_jugados: pj,
+      victorias: v,
+      derrotas: d,
+      puntos: pts,
+      sets_ganados: sg,
+      sets_perdidos: sp,
+      games_ganados: gg,
+      games_perdidos: gp,
+      porcentaje_sets: totalSets > 0 ? sg / totalSets : 0,
+      porcentaje_games: totalGames > 0 ? gg / totalGames : 0,
+    }
+  }, [statsByCategory, player])
+
   const requestedCategoryId = searchParams.get('categoria_id')
-  const selectedStats =
-    statsByCategory.find((stats) => String(stats.categoria.id) === requestedCategoryId) ||
-    statsByCategory[0] ||
-    null
+
+  // Opciones de categoría en selector: Si tiene más de una categoría, incluimos la opción General primero
+  const categoryOptions = useMemo(() => {
+    if (!generalStats) return statsByCategory
+    if (statsByCategory.length <= 1) return statsByCategory
+    return [generalStats, ...statsByCategory]
+  }, [generalStats, statsByCategory])
+
+  const selectedStats = useMemo(() => {
+    if (!statsByCategory.length) return null
+    if (!requestedCategoryId || requestedCategoryId === 'todas') {
+      return (statsByCategory.length > 1 && generalStats) ? generalStats : statsByCategory[0]
+    }
+    return (
+      statsByCategory.find((stats) => String(stats.categoria?.id) === requestedCategoryId) ||
+      (statsByCategory.length > 1 && generalStats) ||
+      statsByCategory[0]
+    )
+  }, [requestedCategoryId, statsByCategory, generalStats])
   const isFav = isJugadorFavorite(player.id)
   const playerId = Number(player.id)
 
@@ -245,27 +295,30 @@ export default function Player() {
                 <select
                   id='player-category'
                   className='form-input'
-                  value={String(selectedStats?.categoria?.id || '')}
+                  value={String(selectedStats?.categoria?.id || 'todas')}
                   onChange={(event) =>
                     setSearchParams({ categoria_id: event.target.value }, { replace: true })
                   }
                 >
-                  {statsByCategory.map((stats) => (
+                  {categoryOptions.map((stats) => (
                     <option key={stats.categoria.id} value={stats.categoria.id}>
                       {stats.categoria.nombre}
                     </option>
                   ))}
                 </select>
                 <p className='text-xs mt-2' style={{ color: 'var(--text-muted)' }}>
-                  Puntos de clasificación: 3 para el ganador y 0 para el perdedor si no cede sets; 2 y
-                  1, respectivamente, si el perdedor gana al menos un set.
+                  Sistema oficial: 1 punto al ganador y 0 al perdedor. El supertiebreak decisivo se computa como 1 game al ganador y 0 al perdedor.
                 </p>
               </div>
             )}
 
             {selectedStats && (
               <div className='grid grid-cols-2 sm:grid-cols-4 gap-3'>
-                <StatCard label='Ranking' value={`#${selectedStats.ranking}`} accent />
+                <StatCard
+                  label='Ranking'
+                  value={selectedStats.ranking ? `#${selectedStats.ranking}` : 'General'}
+                  accent
+                />
                 <StatCard label='Puntos' value={selectedStats.puntos} accent />
                 <StatCard label='Partidos' value={selectedStats.partidos_jugados} />
                 <StatCard

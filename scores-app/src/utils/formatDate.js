@@ -44,3 +44,31 @@ export const formatRelative = (dateString) => {
   if (days < 7) return `Hace ${days}d`
   return formatDate(dateString)
 }
+
+export const formatFriendlyDateTime = (dateString, timeString) => {
+  if (!dateString && !timeString) return ''
+  const parts = []
+  if (dateString) {
+    const d = parseDate(dateString)
+    const today = new Date()
+    const isToday = d.toDateString() === today.toDateString()
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const isYesterday = d.toDateString() === yesterday.toDateString()
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const isTomorrow = d.toDateString() === tomorrow.toDateString()
+
+    if (isToday) parts.push('Hoy')
+    else if (isYesterday) parts.push('Ayer')
+    else if (isTomorrow) parts.push('Mañana')
+    else {
+      parts.push(d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }))
+    }
+  }
+  if (timeString) {
+    parts.push(formatClockTime(timeString))
+  }
+  return parts.filter(Boolean).join(' · ')
+}
+

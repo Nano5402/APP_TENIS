@@ -4,7 +4,7 @@ import LiveBadge from './LiveBadge'
 import MatchJudge from './MatchJudge'
 import ScoreDisplay from './ScoreDisplay'
 import useFavoritesStore from '../../store/useFavoritesStore'
-import { formatClockTime, formatDate } from '../../utils/formatDate'
+import { formatClockTime, formatDate, formatFriendlyDateTime } from '../../utils/formatDate'
 import { cn } from '../../utils/cn'
 import { useLoginRequired } from '../../hooks/useLoginRequired'
 import { getParticipantName } from '../../utils/matchParticipants'
@@ -52,27 +52,48 @@ export default function MatchCard({ match }) {
                 <LiveBadge />
                 {match.en_vivo?.iniciado_at && (
                   <span
-                    className='flex items-center gap-1 text-[10px] tabular-nums'
-                    style={{ color: 'var(--text-muted)' }}
+                    className='flex items-center gap-1 text-xs font-semibold tabular-nums'
+                    style={{ color: 'var(--text-primary)' }}
                   >
-                    <Clock3 className='h-3 w-3' /> {timer.formatted}
+                    <Clock3 className='h-3.5 w-3.5 text-amber-500' /> {timer.formatted}
                   </span>
                 )}
               </span>
             )}
             {isFinished && (
-              <span className='text-[10px] font-medium' style={{ color: 'var(--text-muted)' }}>
-                FIN
-              </span>
+              <div className='flex items-center gap-1.5'>
+                {(match.fecha_inicio || match.hora_inicio) && (
+                  <span
+                    className='inline-flex items-center gap-1 text-xs font-medium'
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    <Clock3 className='w-3.5 h-3.5' style={{ color: 'var(--text-muted)' }} />
+                    {formatFriendlyDateTime(match.fecha_inicio, match.hora_inicio)}
+                  </span>
+                )}
+                <span
+                  className='text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded'
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    color: 'var(--text-secondary)',
+                    border: '1px solid var(--border-color)',
+                  }}
+                >
+                  FIN
+                </span>
+              </div>
             )}
             {!isLive && !isFinished && (match.fecha_inicio || match.hora_inicio) && (
-              <span className='text-[10px]' style={{ color: 'var(--text-muted)' }}>
-                {[
-                  match.fecha_inicio && formatDate(match.fecha_inicio),
-                  formatClockTime(match.hora_inicio),
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
+              <span
+                className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold'
+                style={{
+                  backgroundColor: 'var(--bg-hover)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-color)',
+                }}
+              >
+                <Clock3 className='w-3.5 h-3.5' style={{ color: 'var(--color-brand)' }} />
+                {formatFriendlyDateTime(match.fecha_inicio, match.hora_inicio)}
               </span>
             )}
             <button

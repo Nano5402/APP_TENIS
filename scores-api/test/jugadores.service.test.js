@@ -109,7 +109,7 @@ test('el detalle público contiene solo datos básicos y estadísticas por categ
   assert.equal(Object.hasOwn(player, 'country'), false)
   assert.equal(player.estadisticas.length, 1)
   assert.equal(player.estadisticas[0].categoria.nombre, '4ta')
-  assert.equal(player.estadisticas[0].puntos, 3)
+  assert.equal(player.estadisticas[0].puntos, 1)
 })
 
 test('getAll filtra estadísticas por la categoría de los partidos', async () => {
