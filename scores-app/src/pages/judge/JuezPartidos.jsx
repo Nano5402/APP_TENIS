@@ -17,6 +17,9 @@ import {
   Calendar,
   Filter,
   MapPin,
+  User,
+  Users,
+  Sparkles,
 } from 'lucide-react'
 import { matchService } from '../../services/matchService'
 import { getParticipantName } from '../../utils/matchParticipants'
@@ -33,6 +36,8 @@ import './judge.css'
 import useAuthStore from '../../store/useAuthStore'
 import { projectJudgeEvent } from '../../utils/projectJudgeEvent'
 import { doublesServer } from '../../utils/doublesServer'
+import { applyEvent, computeBreakpoint, createInitialState, serializeState } from '../../generated/scoreEngine.js'
+import { toJudgeState } from '../../utils/judgeState.js'
 
 const reasons = [
   ['tiro_ganador', 'Winner', 'Golpe ganador que el rival no logra devolver'],
@@ -77,6 +82,11 @@ export default function JuezPartidos() {
   const [nameBusy, setNameBusy] = useState(false)
   const [nameError, setNameError] = useState('')
   const isDirectorOrAdmin = ['admin', 'juez_director'].includes(user?.rol)
+
+  // Modo Práctica / Partidos de Prueba (100% privado y en memoria)
+  const [practiceMatch, setPracticeMatch] = useState(null)
+  const [practiceControl, setPracticeControl] = useState(null)
+  const [practiceHistory, setPracticeHistory] = useState([])
 
   // Filtros y pestañas ordenadas para jueces y directores
   const [statusTab, setStatusTab] = useState('programados') // 'programados' | 'finalizados' | 'todos'
@@ -253,8 +263,119 @@ export default function JuezPartidos() {
     return () => { stopped = true; release(); lockAllowed.current = false; session.dispose(); ++listRequest.current }
   }, [refreshMatches, userId])
 
-  const selectedId = view.match?.id
+  const isPractice = Boolean(practiceMatch)
+  const selectedId = isPractice ? 'practica' : view.match?.id
+
+  const startPracticeMatch = (isDoubles = false) => {
+    const config = {
+      mejor_de_sets: 3,
+      juegos_por_set: 6,
+      diferencia_juegos: 2,
+      modo_game: 'ventaja',
+      set_decisivo: 'match_tiebreak',
+      tiebreak_en: 6,
+      tiebreak_puntos: 7,
+      match_tiebreak_puntos: 10,
+      servidor_inicial: 'jugador1',
+    }
+    const rawEngine = createInitialState(config)
+    const serialized = serializeState(rawEngine)
+    const practiceMatchObj = {
+      id: 'practica',
+      isPractice: true,
+      deporte: 'tenis',
+      modalidad: isDoubles ? 'dobles' : 'individual',
+      estado: 'en_vivo',
+      categoria: { id: 0, nombre: 'Modo Práctica' },
+      torneo: { id: 0, nombre: 'Partido de Entrenamiento' },
+      cancha: { nombre: 'Cancha de Práctica (Virtual)' },
+      jugador1: isDoubles ? null : { id: -1, nombre: 'Jugador 1', apellido: '(Práctica)' },
+      jugador2: isDoubles ? null : { id: -2, nombre: 'Jugador 2', apellido: '(Práctica)' },
+      equipo1: isDoubles
+        ? {
+            id: -1,
+            nombre: 'Pareja 1 (Práctica)',
+            jugador1: { id: -1, nombre: 'Jugador 1A', apellido: '' },
+            jugador2: { id: -2, nombre: 'Jugador 1B', apellido: '' },
+          }
+        : null,
+      equipo2: isDoubles
+        ? {
+            id: -2,
+            nombre: 'Pareja 2 (Práctica)',
+            jugador1: { id: -3, nombre: 'Jugador 2A', apellido: '' },
+            jugador2: { id: -4, nombre: 'Jugador 2B', apellido: '' },
+          }
+        : null,
+      formato: config,
+      nombre_override_j1: null,
+      nombre_override_j2: null,
+    }
+
+    const practiceCtrl = toJudgeState({
+      partido: practiceMatchObj,
+      marcador: serialized,
+      raw_marcador: rawEngine,
+      revision: '1:1',
+      configuration: '1:1',
+      eventos_recientes: [],
+      breakpoint: computeBreakpoint(rawEngine, config),
+      en_vivo: {
+        estado: 'en_vivo',
+        iniciado_at: new Date().toISOString(),
+        pausado_at: null,
+        saca: 'jugador1',
+      },
+    })
+
+    setPracticeMatch(practiceMatchObj)
+    setPracticeControl(practiceCtrl)
+    setPracticeHistory([])
+  }
+
+  const exitPractice = async () => {
+    if (
+      await confirm({
+        title: 'Salir del partido de prueba',
+        message: '¿Estás seguro de salir del partido de prueba? Los datos de entrenamiento no se guardarán.',
+        confirmLabel: 'Salir de práctica',
+      })
+    ) {
+      setPracticeMatch(null)
+      setPracticeControl(null)
+      setPracticeHistory([])
+      setPending(null)
+      setPanel(null)
+    }
+  }
+
+  const togglePracticePause = () => {
+    setPracticeControl((prev) => {
+      if (!prev) return prev
+      const isPaused = Boolean(prev.en_vivo?.pausado_at)
+      return toJudgeState({
+        ...prev,
+        en_vivo: {
+          ...prev.en_vivo,
+          pausado_at: isPaused ? null : new Date().toISOString(),
+        },
+      })
+    })
+  }
+
+  const changePracticeServer = (newServer) => {
+    setPracticeControl((prev) => {
+      if (!prev) return prev
+      return toJudgeState({
+        ...prev,
+        raw_marcador: { ...prev.raw_marcador, server: newServer },
+        en_vivo: { ...prev.en_vivo, saca: newServer },
+      })
+    })
+  }
+
   useEffect(() => {
+    if (isPractice) return
     const recover = () => {
       setOnline(navigator.onLine)
       if (navigator.onLine && document.visibilityState === 'visible') sessionRef.current?.sync()
@@ -271,16 +392,17 @@ export default function JuezPartidos() {
       window.removeEventListener('focus', recover)
       document.removeEventListener('visibilitychange', recover)
     }
-  }, [selectedId, Boolean(view.pending)])
+  }, [selectedId, Boolean(view.pending), isPractice])
 
   useMatchRealtime(useCallback((event) => {
+    if (isPractice) return
     if (selectedId) {
       if (event.matchId == null || Number(event.matchId) === Number(selectedId)) sessionRef.current?.sync()
     } else refreshMatches()
-  }, [selectedId, refreshMatches]))
+  }, [selectedId, refreshMatches, isPractice]))
 
-  const state = view.control
-  const match = state?.partido || view.match
+  const state = isPractice ? practiceControl : view.control
+  const match = isPractice ? practiceMatch : (state?.partido || view.match)
   const names = { jugador1: getParticipantName(match || {}, 1) || 'Jugador 1', jugador2: getParticipantName(match || {}, 2) || 'Jugador 2' }
   const score = state?.marcador
   const live = state?.en_vivo
@@ -292,14 +414,14 @@ export default function JuezPartidos() {
     return () => setScoringActive?.(false)
   }, [playing, paused, setScoringActive])
   useEffect(() => {
-    if (!view.pendingCount) return
+    if (isPractice || !view.pendingCount) return
     const warn = event => { event.preventDefault(); event.returnValue = '' }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
-  }, [Boolean(view.pendingCount)])
-  const locked = view.busy || view.needsSync || view.conflict || nameBusy || !exclusive
-  const adminLocked = locked || Boolean(view.pendingCount) || !online
-  const canScore = playing && !paused && !locked
+  }, [Boolean(view.pendingCount), isPractice])
+  const locked = !isPractice && (view.busy || view.needsSync || view.conflict || nameBusy || !exclusive)
+  const adminLocked = !isPractice && (locked || Boolean(view.pendingCount) || !online)
+  const canScore = isPractice ? (playing && !paused) : (playing && !paused && !locked)
   const server = live?.saca || 'jugador1'
   const isDoubles = match?.modalidad === 'dobles'
   const individualServer = doublesServer(state?.raw_marcador, state?.doubles_order)
@@ -310,12 +432,53 @@ export default function JuezPartidos() {
   const { formatted: elapsed } = useMatchTimer(live, live?.estado)
 
   const write = async (operation) => {
+    if (isPractice) {
+      setPending(null)
+      setPanel(null)
+      togglePracticePause()
+      return true
+    }
     if (adminLocked) return false
     const success = await sessionRef.current.write(operation)
     if (success) { setPending(null); setPanel(null) }
     return success
   }
   const record = async (event) => {
+    if (isPractice) {
+      setPending(null)
+      try {
+        const config = practiceMatch.formato
+        const prevControl = practiceControl
+        const nextRaw = applyEvent(prevControl.raw_marcador, event, config)
+        const nextSerialized = serializeState(nextRaw)
+        const nextControl = toJudgeState({
+          ...prevControl,
+          revision: '1:1',
+          partido: {
+            ...practiceMatch,
+            estado: nextRaw.winner ? 'finalizado' : 'en_vivo',
+          },
+          raw_marcador: nextRaw,
+          marcador: nextSerialized,
+          breakpoint: computeBreakpoint(nextRaw, config),
+          eventos_recientes: [
+            { ...event, id: crypto.randomUUID(), local: true },
+            ...(prevControl.eventos_recientes || []),
+          ].slice(0, 20),
+          en_vivo: {
+            ...prevControl.en_vivo,
+            estado: nextRaw.winner ? 'finalizado' : 'en_vivo',
+            saca: nextRaw.server || prevControl.en_vivo.saca,
+          },
+        })
+        setPracticeHistory((prev) => [...prev, prevControl])
+        setPracticeControl(nextControl)
+        return true
+      } catch (err) {
+        console.error('Error en práctica:', err)
+        return false
+      }
+    }
     if (locked) return
     setPending(null)
     return sessionRef.current.record(event)
@@ -326,6 +489,21 @@ export default function JuezPartidos() {
     sessionRef.current.select(item)
   }
   const undo = async () => {
+    if (isPractice) {
+      if (!practiceHistory.length) return
+      if (
+        await confirm({
+          title: 'Deshacer última acción',
+          message: '¿Deseas revertir el último punto en este partido de prueba?',
+          confirmLabel: 'Deshacer',
+        })
+      ) {
+        const previous = practiceHistory[practiceHistory.length - 1]
+        setPracticeHistory((prev) => prev.slice(0, -1))
+        setPracticeControl(previous)
+      }
+      return
+    }
     if (await confirm({ title: 'Deshacer última acción', message: reasonLabel(lastEvent, names), confirmLabel: 'Deshacer' })) {
       if (view.canUndoLocal) sessionRef.current.undoLocal()
       else await write((id) => matchService.undoPoint(id))
@@ -338,6 +516,19 @@ export default function JuezPartidos() {
   const saveNames = async (event) => {
     event.preventDefault()
     if (nameBusy || adminLocked) return
+    if (isPractice) {
+      setPracticeMatch((prev) => ({
+        ...prev,
+        nombre_override_j1: nameDraft[0] || null,
+        nombre_override_j2: nameDraft[1] || null,
+        jugador1: prev.jugador1 ? { ...prev.jugador1, nombre: nameDraft[0] || 'Jugador 1' } : null,
+        jugador2: prev.jugador2 ? { ...prev.jugador2, nombre: nameDraft[1] || 'Jugador 2' } : null,
+        equipo1: prev.equipo1 ? { ...prev.equipo1, nombre: nameDraft[0] || 'Pareja 1' } : null,
+        equipo2: prev.equipo2 ? { ...prev.equipo2, nombre: nameDraft[1] || 'Pareja 2' } : null,
+      }))
+      setPanel(null)
+      return
+    }
     setNameBusy(true); setNameError('')
     try {
       await matchService.updateParticipants(selectedId, { nombre_override_j1: nameDraft[0] || null, nombre_override_j2: nameDraft[1] || null })
@@ -349,7 +540,7 @@ export default function JuezPartidos() {
 
   return (
     <>
-      {!view.match ? (
+      {!selectedId ? (
         <section className='space-y-4 py-2'>
           <div className='flex items-center justify-between gap-2'>
             <div>
@@ -378,6 +569,65 @@ export default function JuezPartidos() {
             >
               <RefreshCw size={20} className={listLoading ? 'animate-spin' : ''} />
             </button>
+          </div>
+
+          {/* Sección Modo Práctica / Partido de Prueba para Jueces */}
+          <div
+            className='p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm'
+            style={{
+              backgroundColor: 'rgba(234, 179, 8, 0.05)',
+              borderColor: 'rgba(234, 179, 8, 0.25)',
+            }}
+          >
+            <div className='flex items-start gap-3'>
+              <div className='p-2.5 rounded-xl bg-amber-500/10 text-amber-400 shrink-0 mt-0.5'>
+                <Sparkles size={20} />
+              </div>
+              <div>
+                <div className='flex items-center gap-2'>
+                  <h2 className='text-sm font-bold text-amber-300'>Modo Práctica para Jueces</h2>
+                  <span className='text-[10px] px-2 py-0.5 rounded-full font-semibold bg-amber-500/20 text-amber-300'>
+                    Entrenamiento
+                  </span>
+                </div>
+                <p className='text-xs text-[var(--text-muted)] mt-0.5 max-w-xl'>
+                  Inicia un partido de prueba virtual para practicar el arbitraje, conteo de puntos, desempates y uso de la mesa. No se guarda en la base de datos, no afecta estadísticas ni aparecerá en la programación pública.
+                </p>
+              </div>
+            </div>
+
+            <div className='flex items-center gap-2 shrink-0'>
+              <button
+                type='button'
+                onClick={() => startPracticeMatch(false)}
+                className='px-3.5 py-2 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm'
+                style={{
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid rgba(234, 179, 8, 0.4)',
+                  color: 'var(--text-primary)',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#eab308')}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'rgba(234, 179, 8, 0.4)')}
+              >
+                <User size={14} className='text-amber-400' />
+                <span>Práctica Individual</span>
+              </button>
+              <button
+                type='button'
+                onClick={() => startPracticeMatch(true)}
+                className='px-3.5 py-2 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all shadow-sm'
+                style={{
+                  backgroundColor: 'rgba(234, 179, 8, 0.15)',
+                  border: '1px solid rgba(234, 179, 8, 0.5)',
+                  color: '#fef08a',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(234, 179, 8, 0.25)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(234, 179, 8, 0.15)')}
+              >
+                <Users size={14} className='text-amber-400' />
+                <span>Práctica Dobles</span>
+              </button>
+            </div>
           </div>
 
           {/* Pestañas de Estado (Programados, Finalizados, Todos) */}
@@ -804,7 +1054,24 @@ export default function JuezPartidos() {
         </section>
       ) : (
         <section className='judge-desk' aria-label='Control del partido'>
-          {!exclusive && (
+          {isPractice && (
+            <div className='flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs sm:text-sm font-medium mb-3 shadow-sm'>
+              <div className='flex items-center gap-2.5'>
+                <Sparkles size={18} className='text-amber-400 shrink-0' />
+                <span>
+                  <strong>MODO PRÁCTICA:</strong> Partido virtual de entrenamiento ({match?.modalidad === 'dobles' ? 'Dobles' : 'Individual'}). No se guarda en la base de datos ni afecta estadísticas.
+                </span>
+              </div>
+              <button
+                type='button'
+                onClick={exitPractice}
+                className='ml-3 px-3 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-semibold whitespace-nowrap'
+              >
+                Salir
+              </button>
+            </div>
+          )}
+          {!isPractice && !exclusive && (
             <p role='status' className='text-xs'>
               Otra pestaña controla la mesa o el navegador no admite el guardado seguro. Cierra la otra mesa y recarga.
             </p>
@@ -812,31 +1079,51 @@ export default function JuezPartidos() {
           <div className='judge-toolbar'>
             <button
               className='judge-tool'
-              disabled={view.busy || nameBusy || Boolean(view.pending)}
+              disabled={!isPractice && (view.busy || nameBusy || Boolean(view.pending))}
               onClick={() => {
-                select(null)
-                refreshMatches()
+                if (isPractice) {
+                  exitPractice()
+                } else {
+                  select(null)
+                  refreshMatches()
+                }
               }}
             >
               <ArrowLeft size={17} /> Partidos
             </button>
-            <span className='text-xs truncate'>{match?.cancha?.nombre || 'Mesa de juez'}</span>
-            <MatchPhotoCapture
-              key={`${userId}:${selectedId}`}
-              matchId={selectedId}
-              userId={userId}
-              finished={finished}
-              disabled={!exclusive}
-              deferUpload={Boolean(view.pendingCount) || view.syncing || !exclusive}
-            />
-            <button
-              className='judge-tool'
-              disabled={view.busy || view.syncing}
-              onClick={() => sessionRef.current.sync()}
-              aria-label='Sincronizar marcador'
-            >
-              <RefreshCw size={17} />
-            </button>
+            <span className='text-xs truncate'>
+              {isPractice ? 'Partido de Prueba (Virtual)' : (match?.cancha?.nombre || 'Mesa de juez')}
+            </span>
+            {!isPractice && (
+              <MatchPhotoCapture
+                key={`${userId}:${selectedId}`}
+                matchId={selectedId}
+                userId={userId}
+                finished={finished}
+                disabled={!exclusive}
+                deferUpload={Boolean(view.pendingCount) || view.syncing || !exclusive}
+              />
+            )}
+            {!isPractice && (
+              <button
+                className='judge-tool'
+                disabled={view.busy || view.syncing}
+                onClick={() => sessionRef.current.sync()}
+                aria-label='Sincronizar marcador'
+              >
+                <RefreshCw size={17} />
+              </button>
+            )}
+            {isPractice && (
+              <button
+                type='button'
+                className='judge-tool text-amber-400 hover:text-amber-300'
+                onClick={() => startPracticeMatch(match?.modalidad === 'dobles')}
+                title='Reiniciar partido de prueba desde cero'
+              >
+                <RefreshCw size={17} /> Reiniciar
+              </button>
+            )}
           </div>
           {!state ? (
             <div className='card p-6' role='status'>
@@ -987,7 +1274,9 @@ export default function JuezPartidos() {
                 role='status'
                 aria-live='polite'
               >
-                {view.pending
+                {isPractice
+                  ? `Modo Práctica · ${practiceHistory.length} puntos jugados · ${reasonLabel(lastEvent, names)}`
+                  : view.pending
                   ? `Marcador local · ${view.pendingCount} pendientes · ${
                       view.sending ? 'sincronizando' : 'guardados aquí'
                     }`
@@ -1224,7 +1513,11 @@ export default function JuezPartidos() {
               {finished && (
                 <section className='judge-state-card' role='status'>
                   <span className='judge-eyebrow'>
-                    {live?.estado === 'cancelado' ? 'ENCUENTRO CANCELADO' : 'CIERRE DEL ENCUENTRO'}
+                    {isPractice
+                      ? 'PARTIDO DE PRÁCTICA FINALIZADO'
+                      : live?.estado === 'cancelado'
+                      ? 'ENCUENTRO CANCELADO'
+                      : 'CIERRE DEL ENCUENTRO'}
                   </span>
                   <h2>
                     {score.ganador
@@ -1232,12 +1525,32 @@ export default function JuezPartidos() {
                       : 'Este partido no admite puntos.'}
                   </h2>
                   <p>
-                    {view.pendingCount
+                    {isPractice
+                      ? 'Has completado el partido de prueba. Puedes reiniciar para entrenar de nuevo o volver a la lista de partidos.'
+                      : view.pendingCount
                       ? 'El resultado sigue pendiente de envío. Conserva este navegador y recupera la conexión.'
                       : view.needsSync
                       ? 'Sincroniza para verificar el estado del resultado.'
                       : 'Consulta el resumen en Estadísticas.'}
                   </p>
+                  {isPractice && (
+                    <div className='flex flex-wrap gap-2 mt-4'>
+                      <button
+                        type='button'
+                        className='btn-secondary flex-1'
+                        onClick={() => startPracticeMatch(match?.modalidad === 'dobles')}
+                      >
+                        <RefreshCw size={16} /> Reiniciar práctica
+                      </button>
+                      <button
+                        type='button'
+                        className='btn-primary flex-1'
+                        onClick={exitPractice}
+                      >
+                        Salir de práctica
+                      </button>
+                    </div>
+                  )}
                 </section>
               )}
               <div className='judge-bottom-controls'>
@@ -1253,11 +1566,15 @@ export default function JuezPartidos() {
                 )}
                 <button
                   className='judge-tool'
-                  disabled={(view.canUndoLocal ? locked : adminLocked) || !lastEvent || live?.estado === 'cancelado'}
+                  disabled={
+                    isPractice
+                      ? practiceHistory.length === 0
+                      : (view.canUndoLocal ? locked : adminLocked) || !lastEvent || live?.estado === 'cancelado'
+                  }
                   onClick={undo}
                 >
                   <Undo2 size={18} />
-                  {view.canUndoLocal ? 'Deshacer local' : 'Deshacer'}
+                  {isPractice ? 'Deshacer punto' : view.canUndoLocal ? 'Deshacer local' : 'Deshacer'}
                 </button>
                 <button className='judge-tool' disabled={view.busy} onClick={() => setPanel('stats')}>
                   <BarChart3 size={18} /> Estadísticas
@@ -1372,22 +1689,32 @@ export default function JuezPartidos() {
             >
               {panel === 'stats' ? (
                 <>
-                  <MatchStats matchId={selectedId} player1={names.jugador1} player2={names.jugador2} />
+                  {!isPractice && (
+                    <MatchStats matchId={selectedId} player1={names.jugador1} player2={names.jugador2} />
+                  )}
+                  {isPractice && (
+                    <div className='p-3 bg-[var(--bg-hover)] rounded-lg text-xs text-[var(--text-muted)] mb-3'>
+                      Estadísticas de entrenamiento (este partido es virtual y no genera registros en base de datos).
+                    </div>
+                  )}
                   <h3 className='font-bold mt-5 mb-2'>Últimas acciones</h3>
                   <ol className='space-y-2 text-sm'>
-                    {state?.eventos_recientes?.map((event) => (
-                      <li key={event.id}>
-                        #{event.secuencia} · {reasonLabel(event, names)}
+                    {state?.eventos_recientes?.map((event, idx) => (
+                      <li key={event.id || idx}>
+                        #{state.eventos_recientes.length - idx} · {reasonLabel(event, names)}
                       </li>
                     ))}
+                    {(!state?.eventos_recientes || state.eventos_recientes.length === 0) && (
+                      <li className='text-xs text-[var(--text-muted)]'>No hay acciones registradas aún.</li>
+                    )}
                   </ol>
                 </>
               ) : (
                 <div className='space-y-4'>
                   <p className='text-sm'>
-                    Al mejor de {state?.reglas.mejor_de} sets · {state?.reglas.juegos_por_set} games por set. El formato configurado del torneo se conserva.
+                    Al mejor de {state?.reglas?.mejor_de} sets · {state?.reglas?.juegos_por_set} games por set. El formato configurado del torneo se conserva.
                   </p>
-                  {playing && panel !== 'serve' && (
+                  {!isPractice && playing && panel !== 'serve' && (
                     <button
                       className='judge-tool w-full'
                       disabled={adminLocked}
@@ -1401,7 +1728,7 @@ export default function JuezPartidos() {
                     </button>
                   )}
 
-                  {!finished && panel !== 'serve' && (
+                  {!isPractice && !finished && panel !== 'serve' && (
                     <div className='pt-2 border-t space-y-2' style={{ borderColor: 'var(--border-color)' }}>
                       <button
                         type='button'
@@ -1433,7 +1760,7 @@ export default function JuezPartidos() {
                   </p>
                   <button
                     className='judge-tool w-full'
-                    disabled={!canScore || adminLocked}
+                    disabled={!canScore || (!isPractice && adminLocked)}
                     onClick={async () => {
                       setPanel(null)
                       if (
@@ -1442,8 +1769,13 @@ export default function JuezPartidos() {
                           message: `¿Debe sacar ${names[receiver]}?`,
                           confirmLabel: 'Cambiar saque',
                         })
-                      )
-                        await write((id) => matchService.setServer(id, receiver))
+                      ) {
+                        if (isPractice) {
+                          changePracticeServer(receiver)
+                        } else {
+                          await write((id) => matchService.setServer(id, receiver))
+                        }
+                      }
                     }}
                   >
                     Cambiar saque a {names[receiver]}
@@ -1454,6 +1786,20 @@ export default function JuezPartidos() {
                       onSubmit={async (e) => {
                         e.preventDefault()
                         if (!firstServers.every(Boolean)) return
+                        if (isPractice) {
+                          setPracticeControl((prev) => ({
+                            ...prev,
+                            doubles_order: {
+                              ...prev?.doubles_order,
+                              [state.raw_marcador.currentSet]: {
+                                1: Number(firstServers[0]),
+                                2: Number(firstServers[1]),
+                              },
+                            },
+                          }))
+                          setPanel(null)
+                          return
+                        }
                         if (
                           await write((id) =>
                             matchService.setDoublesOrder(id, {
