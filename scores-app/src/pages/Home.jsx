@@ -214,15 +214,15 @@ export default function Home() {
             </Link>
           }
         />
-        <div className='space-y-3'>
+        <div className='grid grid-cols-1 md:grid-cols-2 gap-3.5'>
           {lf ? (
             Array(2)
               .fill(0)
               .map((_, i) => <MatchCardSkeleton key={i} />)
           ) : latestSlotMatches.length > 0 ? (
-            latestSlotMatches.map((m) => <MatchCard key={m.id} match={m} />)
+            latestSlotMatches.map((m) => <MatchCard key={m.id} match={m} compact />)
           ) : (
-            <div className='card p-6 sm:p-8 text-center space-y-2'>
+            <div className='card p-6 sm:p-8 text-center space-y-2 col-span-full'>
               <div className='w-10 h-10 rounded-full bg-[var(--bg-hover)] text-[var(--text-muted)] flex items-center justify-center mx-auto'>
                 <Clock3 size={20} />
               </div>
@@ -267,39 +267,39 @@ export default function Home() {
             }
           />
           <div className='space-y-3'>
-            {lu ? (
-              Array(2)
-                .fill(0)
-                .map((_, i) => <MatchCardSkeleton key={i} />)
-            ) : sortedUpcoming.length > 0 ? (
-              <>
-                {visibleUpcoming.map((m) => (
-                  <MatchCard key={m.id} match={m} />
-                ))}
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-3.5'>
+              {lu
+                ? Array(2)
+                    .fill(0)
+                    .map((_, i) => <MatchCardSkeleton key={i} />)
+                : visibleUpcoming.map((m) => (
+                    <MatchCard key={m.id} match={m} compact />
+                  ))}
+            </div>
 
-                {sortedUpcoming.length > INITIAL_UPCOMING_COUNT && (
-                  <button
-                    type='button'
-                    onClick={() => setIsUpcomingExpanded(!isUpcomingExpanded)}
-                    className='w-full py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all border border-[var(--border-color)] bg-[var(--bg-hover)] text-[var(--text-primary)] hover:border-[var(--color-brand)] shadow-sm'
-                  >
-                    {isUpcomingExpanded ? (
-                      <>
-                        <span>Recoger próximos partidos</span>
-                        <ChevronUp className='w-4 h-4 text-[var(--color-brand)]' />
-                      </>
-                    ) : (
-                      <>
-                        <span>
-                          Ver más próximos partidos (+{sortedUpcoming.length - INITIAL_UPCOMING_COUNT} restantes)
-                        </span>
-                        <ChevronDown className='w-4 h-4 text-[var(--color-brand)]' />
-                      </>
-                    )}
-                  </button>
+            {sortedUpcoming.length > INITIAL_UPCOMING_COUNT && (
+              <button
+                type='button'
+                onClick={() => setIsUpcomingExpanded(!isUpcomingExpanded)}
+                className='w-full py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all border border-[var(--border-color)] bg-[var(--bg-hover)] text-[var(--text-primary)] hover:border-[var(--color-brand)] shadow-sm'
+              >
+                {isUpcomingExpanded ? (
+                  <>
+                    <span>Recoger próximos partidos</span>
+                    <ChevronUp className='w-4 h-4 text-[var(--color-brand)]' />
+                  </>
+                ) : (
+                  <>
+                    <span>
+                      Ver más próximos partidos (+{sortedUpcoming.length - INITIAL_UPCOMING_COUNT} restantes)
+                    </span>
+                    <ChevronDown className='w-4 h-4 text-[var(--color-brand)]' />
+                  </>
                 )}
-              </>
-            ) : (
+              </button>
+            )}
+
+            {!lu && sortedUpcoming.length === 0 && (
               <div className='card p-6 text-center text-xs' style={{ color: 'var(--text-muted)' }}>
                 No hay partidos programados próximamente.
               </div>

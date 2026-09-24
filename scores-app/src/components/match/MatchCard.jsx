@@ -11,7 +11,7 @@ import { getParticipantName } from '../../utils/matchParticipants'
 import { useMatchTimer } from '../../hooks/useMatchTimer'
 import ParticipantAvatar from '../ui/ParticipantAvatar'
 
-export default function MatchCard({ match }) {
+export default function MatchCard({ match, compact = false }) {
   const { togglePartido, isPartidoFavorite } = useFavoritesStore()
   const requireLogin = useLoginRequired()
   const isFav = isPartidoFavorite(match.id)
@@ -26,18 +26,30 @@ export default function MatchCard({ match }) {
   const p1Name = getParticipantName(match, 1)
   const p2Name = getParticipantName(match, 2)
   return (
-    <Link to={`/match/${match.id}`}>
-      <div className={cn('card-hover group', isLive && 'match-card-live')}>
+    <Link to={`/match/${match.id}`} className='block h-full'>
+      <div className={cn('card-hover group h-full flex flex-col justify-between', isLive && 'match-card-live')}>
         {/* Header */}
         <div
-          className='flex items-center justify-between px-4 py-2'
+          className={cn(
+            'flex items-center justify-between',
+            compact ? 'px-3.5 py-1.5' : 'px-4 py-2'
+          )}
           style={{ borderBottom: '1px solid var(--border-color)' }}
         >
-          <div className='flex items-center gap-2 min-w-0'>
-            <span className='badge-brand shrink-0'>
-              {match.categoria?.nombre || 'Sin categoría'}
+          <div className='flex items-center gap-1.5 min-w-0'>
+            <span className='badge-brand shrink-0 text-[10px] px-2 py-0.5'>
+              {match.categoria?.nombre || 'General'}
             </span>
-            {match.torneo?.nombre && (
+            {compact && match.cancha?.nombre && (
+              <span
+                className='text-[10px] font-medium truncate flex items-center gap-1'
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <MapPin className='w-2.5 h-2.5 shrink-0' />
+                {match.cancha.nombre}
+              </span>
+            )}
+            {!compact && match.torneo?.nombre && (
               <span
                 className='text-[10px] font-semibold truncate'
                 style={{ color: 'var(--text-muted)' }}
@@ -46,7 +58,7 @@ export default function MatchCard({ match }) {
               </span>
             )}
           </div>
-          <div className='flex items-center gap-2 shrink-0 ml-2'>
+          <div className='flex items-center gap-1.5 shrink-0 ml-2'>
             {isLive && (
               <span className='flex items-center gap-1.5'>
                 <LiveBadge />
@@ -62,7 +74,7 @@ export default function MatchCard({ match }) {
             )}
             {isFinished && (
               <div className='flex items-center gap-1.5'>
-                {(match.fecha_inicio || match.hora_inicio) && (
+                {!compact && (match.fecha_inicio || match.hora_inicio) && (
                   <span
                     className='inline-flex items-center gap-1 text-xs font-medium'
                     style={{ color: 'var(--text-secondary)' }}
@@ -74,8 +86,8 @@ export default function MatchCard({ match }) {
                 <span
                   className='text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded'
                   style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                    color: 'var(--text-secondary)',
+                    backgroundColor: 'var(--color-brand-dim)',
+                    color: 'var(--color-brand)',
                     border: '1px solid var(--border-color)',
                   }}
                 >
@@ -85,14 +97,14 @@ export default function MatchCard({ match }) {
             )}
             {!isLive && !isFinished && (match.fecha_inicio || match.hora_inicio) && (
               <span
-                className='inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold'
+                className='inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold'
                 style={{
                   backgroundColor: 'var(--bg-hover)',
                   color: 'var(--text-primary)',
                   border: '1px solid var(--border-color)',
                 }}
               >
-                <Clock3 className='w-3.5 h-3.5' style={{ color: 'var(--color-brand)' }} />
+                <Clock3 className='w-3 h-3' style={{ color: 'var(--color-brand)' }} />
                 {formatFriendlyDateTime(match.fecha_inicio, match.hora_inicio)}
               </span>
             )}
@@ -105,6 +117,7 @@ export default function MatchCard({ match }) {
               }}
               className='p-1 transition-colors'
               style={{ color: isFav ? '#facc15' : 'var(--text-muted)' }}
+              title={isFav ? 'Quitar de favoritos' : 'Añadir a favoritos'}
             >
               <Star className={cn('w-3 h-3', isFav && 'fill-current')} />
             </button>
@@ -112,7 +125,7 @@ export default function MatchCard({ match }) {
         </div>
 
         {/* Jugadores + Scores */}
-        <div className='px-4 py-3 space-y-2.5'>
+        <div className={cn(compact ? 'px-3.5 py-2 space-y-1.5 flex-1' : 'px-4 py-3 space-y-2.5')}>
           <PlayerRow
             name={p1Name}
             photo={match.jugador1?.foto}
@@ -122,6 +135,7 @@ export default function MatchCard({ match }) {
             isServing={match.marcador_actual?.server === 'jugador1'}
             isWinner={winner === 'jugador1'}
             isLive={isLive}
+            compact={compact}
           />
           <PlayerRow
             name={p2Name}
@@ -132,10 +146,11 @@ export default function MatchCard({ match }) {
             isServing={match.marcador_actual?.server === 'jugador2'}
             isWinner={winner === 'jugador2'}
             isLive={isLive}
+            compact={compact}
           />
         </div>
 
-        {match.cancha && (
+        {!compact && match.cancha && (
           <div
             className='px-4 py-2 text-[11px] flex items-center gap-1.5'
             style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border-color)' }}
@@ -145,9 +160,9 @@ export default function MatchCard({ match }) {
           </div>
         )}
 
-        <MatchJudge match={match} className='px-4 py-2' />
+        {!compact && <MatchJudge match={match} className='px-4 py-2' />}
 
-        {match.notas && (
+        {!compact && match.notas && (
           <div
             className='px-4 py-2 text-xs line-clamp-2'
             style={{
@@ -164,7 +179,7 @@ export default function MatchCard({ match }) {
   )
 }
 
-function PlayerRow({ name, photo, team, sets, points, isServing, isWinner, isLive }) {
+function PlayerRow({ name, photo, team, sets, points, isServing, isWinner, isLive, compact = false }) {
   return (
     <div className='flex items-center gap-2'>
       {isServing && isLive && (
@@ -175,15 +190,15 @@ function PlayerRow({ name, photo, team, sets, points, isServing, isWinner, isLiv
       )}
       <ParticipantAvatar team={team} player={{ foto: photo }} name={name} size='xs' />
       <span
-        className={cn('flex-1 text-sm truncate')}
+        className={cn('flex-1 truncate', compact ? 'text-xs' : 'text-sm')}
         style={{
           color: isWinner ? 'var(--text-primary)' : 'var(--text-secondary)',
-          fontWeight: isWinner ? 600 : 400,
+          fontWeight: isWinner ? 700 : 400,
         }}
       >
         {name || '—'}
       </span>
-      <ScoreDisplay sets={sets} isWinner={isWinner} isLive={isLive} />
+      <ScoreDisplay sets={sets} isWinner={isWinner} isLive={isLive} compact={compact} />
       {isLive && points != null && (
         <strong
           className='min-w-9 text-center rounded-md py-1 text-sm'
