@@ -11,7 +11,7 @@ import { getParticipantName } from '../../utils/matchParticipants'
 import { useMatchTimer } from '../../hooks/useMatchTimer'
 import ParticipantAvatar from '../ui/ParticipantAvatar'
 
-export default function MatchCard({ match, compact = false }) {
+export default function MatchCard({ match, compact = false, to }) {
   const { togglePartido, isPartidoFavorite } = useFavoritesStore()
   const requireLogin = useLoginRequired()
   const isFav = isPartidoFavorite(match.id)
@@ -26,7 +26,7 @@ export default function MatchCard({ match, compact = false }) {
   const p1Name = getParticipantName(match, 1)
   const p2Name = getParticipantName(match, 2)
   return (
-    <Link to={`/match/${match.id}`} className='block h-full'>
+    <Link to={to || `/match/${match.id}`} className='block h-full'>
       <div className={cn('card-hover group h-full flex flex-col justify-between', isLive && 'match-card-live')}>
         {/* Header */}
         <div

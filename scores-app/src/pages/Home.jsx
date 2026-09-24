@@ -124,7 +124,7 @@ export default function Home() {
 
           <div className='flex flex-wrap gap-2.5 mt-7'>
             <Link
-              to={live.length > 0 ? '/live' : '/tennis'}
+              to={live.length > 0 ? '/pantalla' : '/tennis'}
               className='inline-flex items-center gap-2 px-5 py-3 rounded-full text-sm font-bold'
               style={{ backgroundColor: 'var(--club-green-light)', color: 'var(--club-green-dark)' }}
             >
@@ -150,6 +150,7 @@ export default function Home() {
               value={ll ? '—' : live.length}
               label='En vivo'
               accent='var(--club-clay)'
+              to={live.length > 0 ? '/pantalla' : undefined}
             />
             <HeroStat
               icon={Clock3}
@@ -171,15 +172,28 @@ export default function Home() {
       {(ll || live.length > 0) && (
         <section>
           <SectionHeader
-            title='En vivo ahora'
+            title={
+              <Link
+                to='/pantalla'
+                className='inline-flex items-center gap-2 text-[var(--text-primary)] hover:text-[var(--color-brand)] transition-colors'
+                title='Ver marcador en vivo en pantalla'
+              >
+                <span>En vivo ahora</span>
+                <span className='relative flex h-2.5 w-2.5'>
+                  <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75'></span>
+                  <span className='relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500'></span>
+                </span>
+                <ChevronRight className='w-4 h-4 opacity-50' />
+              </Link>
+            }
             subtitle={!ll ? `${live.length} partido${live.length !== 1 ? 's' : ''} en directo` : ''}
             action={
               <Link
-                to='/live'
-                className='flex items-center gap-1 text-xs font-medium'
+                to='/pantalla'
+                className='flex items-center gap-1 text-xs font-semibold'
                 style={{ color: 'var(--color-brand)' }}
               >
-                Ver todos <ChevronRight className='w-3.5 h-3.5' />
+                Ver en pantalla <ChevronRight className='w-3.5 h-3.5' />
               </Link>
             }
           />
@@ -188,7 +202,7 @@ export default function Home() {
               ? Array(2)
                   .fill(0)
                   .map((_, i) => <MatchCardSkeleton key={i} />)
-              : live.map((m) => <MatchCard key={m.id} match={m} />)}
+              : live.map((m) => <MatchCard key={m.id} match={m} to='/pantalla' />)}
           </div>
         </section>
       )}
@@ -347,8 +361,8 @@ export default function Home() {
   )
 }
 
-function HeroStat({ icon: Icon, value, label, accent }) {
-  return (
+function HeroStat({ icon: Icon, value, label, accent, to }) {
+  const content = (
     <div className='hero-stat'>
       <div className='flex items-center gap-2'>
         <Icon className='w-3.5 h-3.5' style={{ color: accent }} />
@@ -357,6 +371,16 @@ function HeroStat({ icon: Icon, value, label, accent }) {
       <p className='text-[10px] font-semibold text-white/55 mt-1'>{label}</p>
     </div>
   )
+
+  if (to) {
+    return (
+      <Link to={to} className='block hover:opacity-90 transition-opacity'>
+        {content}
+      </Link>
+    )
+  }
+
+  return content
 }
 
 function NewsCard({ article }) {
