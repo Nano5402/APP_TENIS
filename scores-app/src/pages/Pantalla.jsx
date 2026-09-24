@@ -40,6 +40,10 @@ export default function Pantalla() {
   const requestActive = useRef(false)
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
+
     const onScroll = () => {
       const scrollPos = window.scrollY || document.documentElement.scrollTop || 0
       setIsScrolled(scrollPos > 60)

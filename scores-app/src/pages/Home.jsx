@@ -125,6 +125,7 @@ export default function Home() {
           <div className='flex flex-wrap gap-2.5 mt-7'>
             <Link
               to={live.length > 0 ? '/pantalla' : '/tennis'}
+              onClick={() => window.scrollTo(0, 0)}
               className='inline-flex items-center gap-2 px-5 py-3 rounded-full text-sm font-bold'
               style={{ backgroundColor: 'var(--club-green-light)', color: 'var(--club-green-dark)' }}
             >
@@ -175,6 +176,7 @@ export default function Home() {
             title={
               <Link
                 to='/pantalla'
+                onClick={() => window.scrollTo(0, 0)}
                 className='inline-flex items-center gap-2 text-[var(--text-primary)] hover:text-[var(--color-brand)] transition-colors'
                 title='Ver marcador en vivo en pantalla'
               >
@@ -190,6 +192,7 @@ export default function Home() {
             action={
               <Link
                 to='/pantalla'
+                onClick={() => window.scrollTo(0, 0)}
                 className='flex items-center gap-1 text-xs font-semibold'
                 style={{ color: 'var(--color-brand)' }}
               >

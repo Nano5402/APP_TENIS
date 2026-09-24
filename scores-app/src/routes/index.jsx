@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import useAuthStore from '../store/useAuthStore'
 import AuthLayout from '../layouts/AuthLayout'
@@ -9,6 +9,16 @@ import AdminRoute from './AdminRoute'
 import OfficialRoute from './OfficialRoute'
 import DirectorRoute from './DirectorRoute'
 import JudgeLayout from '../layouts/JudgeLayout'
+
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
+  }, [pathname])
+  return null
+}
 
 // ── Auth ──────────────────────────────────────────────────
 const Login = lazy(() => import('../pages/auth/Login'))
@@ -72,7 +82,9 @@ export default function AppRouter() {
     return <Navigate to='/director' replace />
   }
   return (
-    <Routes>
+    <>
+      <ScrollToTop />
+      <Routes>
       {/* Auth */}
       <Route element={<AuthLayout />}>
         <Route path='/login' element={<Login />} />
@@ -176,5 +188,6 @@ export default function AppRouter() {
 
       <Route path='*' element={<Navigate to='/' replace />} />
     </Routes>
+    </>
   )
 }
