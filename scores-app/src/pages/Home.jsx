@@ -117,10 +117,14 @@ export default function Home() {
             Club Unión · Bucaramanga
           </span>
           <h1 className='text-2xl sm:text-5xl font-extrabold tracking-[-0.05em] leading-[1.12] sm:leading-[1.08] mt-3.5 sm:mt-5 max-w-xl'>
-            El torneo del club, punto a punto.
+            LEGAL BRANDING <span className='inline-block'>• TENIS</span>
           </h1>
+          <p className='text-sm sm:text-xl font-semibold mt-2 sm:mt-3 text-white/90'>
+            El torneo del club, punto a punto.
+          </p>
           <p className='text-xs sm:text-base leading-relaxed mt-2.5 sm:mt-4 max-w-xl text-white/70'>
-            Consulta marcadores en vivo, resultados del último turno y la programación oficial del torneo.
+            Sigue los partidos en vivo, resultados y programación del torneo de tenis del Club
+            Unión en Bucaramanga. Todas las categorías, en un solo lugar.
           </p>
 
           <div className='flex flex-wrap gap-2.5 mt-6 sm:mt-7'>

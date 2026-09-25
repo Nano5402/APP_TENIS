@@ -420,7 +420,7 @@ export default function TournamentRoster({
           </button>
         </div>
       )}
-      {issues.length > 0 && (
+      {admin && issues.length > 0 && (
         <details className='card p-4 border border-amber-500/40'>
           <summary className='font-semibold'>{issues.length} partidos por revisar</summary>
           <p className='text-xs my-2'>

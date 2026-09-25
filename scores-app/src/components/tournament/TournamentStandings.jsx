@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import ParticipantAvatar from '../ui/ParticipantAvatar'
+import useAuthStore from '../../store/useAuthStore'
+import { ChevronDown, BarChart3 } from 'lucide-react'
 
 export default function TournamentStandings({ data }) {
+  const management = useAuthStore(s => s.isAuthenticated && ['admin', 'juez_director'].includes(s.user?.rol)) && data.puede_ver_gestion === true
   const [category, setCategory] = useState(''),
     [group, setGroup] = useState('')
   const categories = data.categorias || []
@@ -72,8 +75,7 @@ export default function TournamentStandings({ data }) {
         </div>
         {!rows.length ? (
           <p className='text-sm text-[var(--text-secondary)]'>
-            No hay parejas asignadas. La organización debe guardar los grupos desde «Parejas
-            inscritas»; no se deducen de los partidos.
+            {management ? 'No hay parejas asignadas. Guarda la distribución desde «Parejas inscritas».' : 'Las posiciones de este grupo estarán disponibles cuando la organización publique su distribución.'}
           </p>
         ) : (
           <div className='space-y-2'>
@@ -112,14 +114,20 @@ export default function TournamentStandings({ data }) {
                     </div>
                   ))}
                 </dl>
-                <details className='mt-2 text-xs'>
-                  <summary className='cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]'>
-                    Detalle de sets y games
+                <details className='group mt-3 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] overflow-hidden'>
+                  <summary className='list-none cursor-pointer flex items-center gap-2 min-h-11 px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px]'>
+                    <BarChart3 size={15} aria-hidden='true' /> Ver detalle del rendimiento
+                    <ChevronDown size={16} className='ml-auto transition-transform group-open:rotate-180 motion-reduce:transition-none' aria-hidden='true' />
                   </summary>
-                  <p className='pt-1.5 text-[var(--text-muted)]'>
-                    Sets: {r.sets_ganados || 0} ganados / {r.sets_perdidos || 0} perdidos ({r.sets_jugados || 0} jugados) · Games:{' '}
-                    {r.games_favor || 0} a favor / {r.games_contra || 0} en contra ({r.games_jugados || 0} jugados)
-                  </p>
+                  <div className='p-3 pt-0 space-y-3'>
+                    <p className='text-xs text-[var(--text-muted)]'>Resumen acumulado de los partidos finalizados de esta tabla.</p>
+                    <div className='grid gap-2 sm:grid-cols-3'>
+                      <Performance title='Partidos' won={r.pg} lost={r.pp} total={r.pj} positive='Ganados' negative='Perdidos' />
+                      <Performance title='Sets' won={r.sets_ganados} lost={r.sets_perdidos} total={r.sets_jugados} positive='Ganados' negative='Perdidos' />
+                      <Performance title='Games' won={r.games_favor} lost={r.games_contra} total={r.games_jugados} positive='A favor' negative='En contra' />
+                    </div>
+                    <p className='text-[11px] leading-relaxed text-[var(--text-muted)]'>El porcentaje compara los ganados con el total jugado. El supertiebreak cuenta como un set y un game, no como sus puntos individuales.</p>
+                  </div>
                 </details>
               </article>
             ))}
@@ -127,9 +135,13 @@ export default function TournamentStandings({ data }) {
         )}
       </section>
       <p className='text-xs text-[var(--text-muted)]'>
-        Criterio oficial: 1 punto al ganador y 0 al perdedor. En caso de empate se define por efectividad de sets (% sets ganados/jugados), efectividad de games (% games favor/jugados) y enfrentamiento directo. Los supertiebreaks se computan como 1 game y 1 set.
+        Victoria: 1 punto; derrota: 0. Empate entre dos: porcentaje de sets, porcentaje de games
+        y enfrentamiento directo. Triple empate: quien tenga el mayor porcentaje de games en
+        solitario queda primero; los otros dos se ordenan por su enfrentamiento directo.
+        Si no hay un líder único o empatan más de tres, se comparan porcentajes de sets y games.
+        Un supertiebreak aporta 1 set y 1 game al ganador, y 0 al perdedor.
       </p>
-      {!!data.sin_grupo?.length && (
+      {management && !!data.sin_grupo?.length && (
         <details className='card p-4'>
           <summary className='font-semibold cursor-pointer'>
             {data.sin_grupo.length} parejas aún sin grupo
@@ -144,7 +156,7 @@ export default function TournamentStandings({ data }) {
           ))}
         </details>
       )}
-      {!!data.incidencias?.length && (
+      {management && !!data.incidencias?.length && (
         <details className='card p-4 border border-amber-500/40'>
           <summary className='font-semibold cursor-pointer'>
             {data.incidencias.length} cruces fuera de la distribución
@@ -163,5 +175,26 @@ export default function TournamentStandings({ data }) {
         </details>
       )}
     </div>
+  )
+}
+
+function Performance({ title, won = 0, lost = 0, total = 0, positive, negative }) {
+  const percent = total > 0 ? Math.max(0, Math.min(100, Number(won) / Number(total) * 100)) : 0
+  return (
+    <section className='rounded-xl p-3 bg-[var(--bg-hover)] space-y-2'>
+      <div className='flex items-baseline justify-between gap-2'>
+        <h4 className='text-xs font-semibold'>{title}</h4>
+        <strong className='text-lg tabular-nums text-[var(--color-brand)]'>{total > 0 ? `${percent.toFixed(1)}%` : '—'}</strong>
+      </div>
+      <div className='h-1.5 rounded-full bg-[var(--bg-card)] overflow-hidden' aria-hidden='true'>
+        <div className='h-full rounded-full bg-[var(--color-brand)]' style={{ width: `${percent}%` }} />
+      </div>
+      <dl className='grid grid-cols-3 gap-1 text-center text-[10px] text-[var(--text-muted)]'>
+        {[[positive, won], [negative, lost], ['Total', total]].map(([label, value]) => (
+          <div key={label}><dt>{label}</dt><dd className='text-sm font-semibold tabular-nums text-[var(--text-primary)] mt-1'>{value}</dd></div>
+        ))}
+      </dl>
+      {!total && <p className='text-[10px] text-[var(--text-muted)]'>Sin datos finalizados todavía</p>}
+    </section>
   )
 }

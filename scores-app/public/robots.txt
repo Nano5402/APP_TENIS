@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+
+# Private areas remain protected by authentication, not by these rules.
+Disallow: /admin
+Disallow: /juez
+Disallow: /director
+Disallow: /profile
+Disallow: /settings
+Disallow: /favorites
+Disallow: /soporte
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+
+Sitemap: https://legal-branding.com/sitemap.xml

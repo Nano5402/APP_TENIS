@@ -1,10 +1,10 @@
 {
   "id": "/",
-  "name": "Tenis Club Unión",
-  "short_name": "Tenis Unión",
+  "name": "LEGAL BRANDING • TENIS",
+  "short_name": "LEGAL BRANDING",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f5f8f4",
   "theme_color": "#123c2a",
-  "icons": [{ "src": "/branding/subcomite-tenis-club-union.png", "type": "image/png", "sizes": "any" }]
+  "icons": [{ "src": "/branding/legal-branding.png", "type": "image/png", "sizes": "any" }]
 }

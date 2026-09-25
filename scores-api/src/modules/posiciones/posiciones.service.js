@@ -20,7 +20,7 @@ exports.getByTorneo = async (torneoId) => {
 
   // Fetch all matches of this tournament (both finished and pending, to know participants & groups)
   const [allPartidos] = await db.query(
-    `SELECT p.id, p.categoria_id, torneo_id, fase, grupo, ronda, p.estado, ganador, COALESCE(c.nombre,'Sin categoría') AS categoria_nombre,
+    `SELECT p.id, p.categoria_id, p.mejor_de_sets, p.set_decisivo, torneo_id, fase, grupo, ronda, p.estado, ganador, COALESCE(c.nombre,'Sin categoría') AS categoria_nombre,
             ${col1} AS p1_id, ${col2} AS p2_id
      FROM partidos p LEFT JOIN categorias c ON c.id=p.categoria_id
      WHERE torneo_id = ? AND p.estado <> 'cancelado'`,
@@ -149,7 +149,7 @@ exports.getByTorneo = async (torneoId) => {
   let setsByPartido = {}
   if (finishedIds.length > 0) {
     const [setsRows] = await db.query(
-      'SELECT partido_id, games_j1, games_j2, completado FROM sets_partido WHERE partido_id IN (?) AND completado = 1',
+      'SELECT partido_id, numero_set, games_j1, games_j2, completado FROM sets_partido WHERE partido_id IN (?) AND completado = 1',
       [finishedIds]
     )
     setsRows.forEach((s) => {
@@ -222,9 +222,9 @@ exports.getByTorneo = async (torneoId) => {
       const g1 = Number(s.games_j1 || 0)
       const g2 = Number(s.games_j2 || 0)
 
-      // Regla de supertiebreak (10 o más puntos):
-      // Cuenta como 1 game para el ganador y 0 para el perdedor (total 1 game jugado y 1 set)
-      const isSTB = g1 >= 10 || g2 >= 10
+      // Use the saved match format, never infer the set type from its score.
+      const isSTB = p.set_decisivo === 'match_tiebreak' &&
+        Number(s.numero_set) === Number(p.mejor_de_sets || 3)
       const g1Stats = isSTB ? (g1 > g2 ? 1 : 0) : g1
       const g2Stats = isSTB ? (g2 > g1 ? 1 : 0) : g2
 
@@ -269,8 +269,14 @@ exports.getByTorneo = async (torneoId) => {
     // Registrar ganador del enfrentamiento directo entre ambos participantes
     if (['jugador1', 'jugador2'].includes(p.ganador)) {
       const winnerId = p.ganador === 'jugador1' ? p1 : p2
-      const mKey = p1 < p2 ? `${p1}_${p2}` : `${p2}_${p1}`
-      directMatchups.set(mKey, winnerId)
+      const pairKey = p1 < p2 ? `${p1}_${p2}` : `${p2}_${p1}`
+      for (const scope of new Set(['general', groupKey(p)])) {
+        if (!scope) continue
+        const mKey = JSON.stringify([scope, pairKey])
+        const wins = directMatchups.get(mKey) || new Map()
+        wins.set(winnerId, (wins.get(winnerId) || 0) + 1)
+        directMatchups.set(mKey, wins)
+      }
     }
 
     // Apply to global stats
@@ -292,7 +298,15 @@ exports.getByTorneo = async (torneoId) => {
   // 1. Puntos totales DESC
   // 2. Empate entre 2: Ratio Sets DESC -> Ratio Games DESC -> Enfrentamiento directo
   // 3. Triple empate: Mejor Ratio Games pasa directo (1°); desempate de los 2 restantes por Enfrentamiento directo
-  const sortStandings = (list) => {
+  const sortStandings = (list, scope = 'general') => {
+    const directWinner = (a, b) => {
+      const pairKey = a.id < b.id ? `${a.id}_${b.id}` : `${b.id}_${a.id}`
+      const wins = directMatchups.get(JSON.stringify([scope, pairKey]))
+      const first = wins?.get(a.id) || 0, second = wins?.get(b.id) || 0
+      return first === second ? null : first > second ? a.id : b.id
+    }
+    // Stable input for unresolved ties, independent of database row order.
+    list.sort((a, b) => a.participante.nombre.localeCompare(b.participante.nombre, 'es') || a.id - b.id)
     const pointsMap = new Map()
     for (const entry of list) {
       const pts = Number(entry.puntos || 0)
@@ -330,8 +344,7 @@ exports.getByTorneo = async (torneoId) => {
         }
 
         // Criterio 3: Enfrentamiento directo entre ambos
-        const mKey = a.id < b.id ? `${a.id}_${b.id}` : `${b.id}_${a.id}`
-        const winnerId = directMatchups.get(mKey)
+        const winnerId = directWinner(a, b)
         if (winnerId === a.id) {
           result.push(a, b)
           continue
@@ -362,8 +375,7 @@ exports.getByTorneo = async (torneoId) => {
         // El que tenga mayor porcentaje entre los 3 pasa directo
         if ((top.ratio_games || 0) - (second.ratio_games || 0) > 1e-6) {
           // Desempate de los 2 restantes por su enfrentamiento directo mutuo
-          const mKey = second.id < third.id ? `${second.id}_${third.id}` : `${third.id}_${second.id}`
-          const winnerId = directMatchups.get(mKey)
+          const winnerId = directWinner(second, third)
           if (winnerId === third.id) {
             result.push(top, third, second)
           } else {
@@ -419,7 +431,7 @@ exports.getByTorneo = async (torneoId) => {
   )
   sortedGroupNames.forEach((gName) => {
     const gMap = groupStats.get(gName)
-    grupos[gName] = sortStandings(Array.from(gMap.values()))
+    grupos[gName] = sortStandings(Array.from(gMap.values()), gName)
   })
 
   return {

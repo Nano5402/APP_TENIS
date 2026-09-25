@@ -186,7 +186,7 @@ export default function Match() {
         </div>
       </div>
 
-      {match.deporte === 'tenis' && (
+      {match.deporte === 'tenis' && match.estado === 'en_vivo' && (
         <div className='card p-4'>
           <ClayCourt match={match} />
         </div>

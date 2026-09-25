@@ -12,6 +12,7 @@ import { confirm } from '../utils/confirm'
 export default function TournamentDetail() {
   const { id } = useParams(),
     admin = useAuthStore((s) => s.user?.rol === 'admin')
+  const standingsManagement = useAuthStore((s) => s.isAuthenticated && ['admin', 'juez_director'].includes(s.user?.rol))
   const [t, setT] = useState(null),
     [tab, setTab] = useState('matches'),
     [data, setData] = useState(null),
@@ -42,7 +43,7 @@ export default function TournamentDetail() {
       tab === 'teams'
         ? tournamentService.getInscripciones(id)
         : tab === 'standings'
-          ? tournamentService.getStandings(id)
+          ? tournamentService.getStandings(id, standingsManagement)
           : matchService.getAll({ torneo_id: id }),
     ])
       .then(([meta, content]) => {
@@ -60,7 +61,7 @@ export default function TournamentDetail() {
     return () => {
       active = false
     }
-  }, [id, tab, tick])
+  }, [id, tab, tick, standingsManagement])
   const remove = async (team) => {
     if (
       !(await confirm({
@@ -106,10 +107,10 @@ export default function TournamentDetail() {
             <p className='text-sm'>
               {t.estado.replace('_', ' ')} · {t.sistema.replaceAll('_', ' ')}
             </p>
-            <p className='text-xs'>
+            {admin && <p className='text-xs'>
               La organización programa los partidos. Inscribir parejas no genera cruces
               automáticamente.
-            </p>
+            </p>}
           </header>
           <div className='flex flex-wrap gap-2' aria-label='Secciones del torneo'>
             {[

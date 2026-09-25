@@ -9,6 +9,26 @@ function loadPosiciones(mockDb) {
   return require('../src/modules/posiciones/posiciones.service')
 }
 
+test('set largo normal conserva games; supertiebreak configurado a 7 cuenta uno', async () => {
+  for (const [mode, number, g1, g2, expected] of [
+    ['set_completo', 3, 12, 10, 12],
+    ['match_tiebreak', 1, 10, 8, 10],
+    ['match_tiebreak', 3, 7, 5, 1],
+  ]) {
+    const svc = loadPosiciones({ query: async sql => {
+      if (sql.includes('FROM torneos')) return [[{ id: 1, modalidad: 'individual' }]]
+      if (sql.includes('FROM partidos')) return [[{ id: 1, p1_id: 1, p2_id: 2,
+        estado: 'finalizado', ganador: 'jugador1', mejor_de_sets: 3, set_decisivo: mode }]]
+      if (sql.includes('FROM sets_partido')) return [[{ partido_id: 1, numero_set: number,
+        games_j1: g1, games_j2: g2, completado: 1 }]]
+      if (sql.includes('FROM jugadores')) return [[{ id: 1, nombre: 'A', apellido: '' }, { id: 2, nombre: 'B', apellido: '' }]]
+      return [[]]
+    } })
+    const result = await svc.getByTorneo(1)
+    assert.equal(result.tabla_general.find(p => p.id === 1).games_favor, expected)
+  }
+})
+
 test('puntuación oficial: otorga 1 punto al ganador y 0 al perdedor', async () => {
   const matches = [
     {
@@ -65,6 +85,8 @@ test('supertiebreak: cuenta como 1 game y 1 set (ejemplo 6/0 5/7 10/8 = 19 games
   const matches = [
     {
       id: 2,
+      mejor_de_sets: 3,
+      set_decisivo: 'match_tiebreak',
       torneo_id: 10,
       categoria_id: 1,
       fase: 'grupos',
@@ -80,7 +102,7 @@ test('supertiebreak: cuenta como 1 game y 1 set (ejemplo 6/0 5/7 10/8 = 19 games
   const sets = [
     { partido_id: 2, games_j1: 6, games_j2: 0, completado: 1 },
     { partido_id: 2, games_j1: 5, games_j2: 7, completado: 1 },
-    { partido_id: 2, games_j1: 10, games_j2: 8, completado: 1 }, // Supertiebreak!
+    { partido_id: 2, numero_set: 3, games_j1: 10, games_j2: 8, completado: 1 }, // Supertiebreak!
   ]
 
   const mockDb = {

@@ -49,7 +49,19 @@ const groupAction = (action) => async (req, res) => {
 }
 router.get(
   '/:id/grupos',
-  groupAction((req) => groups.get(Number(req.params.id)))
+  (req, res, next) => {
+    res.setHeader('Cache-Control', 'private, no-store')
+    const hasSession = req.headers.authorization || /(?:^|;\s*)cu_session=/.test(req.headers.cookie || '')
+    return hasSession ? requireAuth(req, res, next) : next()
+  },
+  groupAction(async (req) => {
+    const data = await groups.get(Number(req.params.id))
+    if (!req.sessionChecked || !['admin', 'juez_director'].includes(req.user?.rol)) {
+      data.incidencias = []
+      delete data.version
+    }
+    return data
+  })
 )
 router.put(
   '/:id/grupos',
@@ -58,6 +70,9 @@ router.put(
   groupAction((req) => groups.save(Number(req.params.id), req.body.grupos, req.body.version))
 )
 router.get('/:torneo_id/posiciones', require('../posiciones/posiciones.controller').getByTorneo)
+router.get('/:torneo_id/posiciones/gestion', requireAuth,
+  require('../../middlewares/auth.middleware').requireDirector,
+  require('../posiciones/posiciones.controller').getByTorneo)
 router.get('/:id/inscripciones', require('./inscripciones.controller').getByTorneo)
 router.post(
   '/:id/inscripciones',
