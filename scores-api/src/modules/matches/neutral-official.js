@@ -6,7 +6,8 @@ exports.assertNeutral = async (conn, matchId, userId) => {
 }
 exports.guard = async (req, res, next) => {
   try {
-    await exports.assertNeutral(require('../../config/db'), req.params.matchId, req.user.id)
+    const matchId = req.params.matchId || req.params.id
+    await exports.assertNeutral(require('../../config/db'), matchId, req.user.id)
     next()
   } catch (e) { res.status(e.status || 503).json({ ok: false, message: e.status ? e.message : 'No se pudo verificar la participación. Reintenta.' }) }
 }

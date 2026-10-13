@@ -142,7 +142,7 @@ app.use((req, res) => {
 app.use((error, _req, res, _next) => {
   console.error('[ERROR]', error)
   res
-    .status(error.status || 500)
+    .status(error.status || error.statusCode || 500)
     .json({ ok: false, message: error.message || 'Error interno del servidor' })
 })
 
