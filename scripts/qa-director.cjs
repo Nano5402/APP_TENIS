@@ -12,12 +12,12 @@ const replacement = { id: 22, nombre: 'Suárez / León', categoria: category, ju
 ;(async () => {
   const browser = await chromium.launch({ channel: 'chrome', headless: true })
   try {
-    for (const width of [390, 1280]) {
+    for (const width of [320, 390, 1280]) {
       const context = await browser.newContext({ viewport: { width, height: 850 } })
       const page = await context.newPage()
       const errors = [], writes = []
       page.on('pageerror', (error) => errors.push(error.message))
-      await page.addInitScript(() => localStorage.setItem('auth-storage-v2', JSON.stringify({ state: { isAuthenticated: true, user: { id: 99, rol: 'juez_director', nombre: 'Directora', apellido: 'Prueba' } }, version: 0 })))
+      await page.addInitScript(() => localStorage.setItem('auth-storage-v2', JSON.stringify({ state: { isAuthenticated: true, user: { id: 99, rol: 'juez_director', email: 'qa@example.test', numero_documento: '12345678', nombre: 'Directora', apellido: 'Prueba' } }, version: 0 })))
       await page.route('**/*', async (route) => {
         const request = route.request(), url = new URL(request.url())
         if (url.pathname.startsWith('/api/')) {
@@ -34,7 +34,7 @@ const replacement = { id: 22, nombre: 'Suárez / León', categoria: category, ju
           else if (endpoint === '/users/jueces') data = [{ id: 3, nombre: 'Juez', apellido: 'Actual', rol: 'juez' }, { id: 8, nombre: 'Jueza', apellido: 'Nueva', rol: 'juez' }]
           else if (endpoint === '/categorias') data = [category]
           else if (endpoint === '/equipos') data = [replacement]
-          else if (endpoint === '/users/me') data = { id: 99, rol: 'juez_director', nombre: 'Directora' }
+          else if (endpoint === '/users/me') data = { id: 99, rol: 'juez_director', email: 'qa@example.test', numero_documento: '12345678', nombre: 'Directora' }
           return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, data }) })
         }
         if (url.origin === base) return route.continue()

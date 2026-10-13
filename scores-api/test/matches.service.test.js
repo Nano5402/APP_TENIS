@@ -8,6 +8,10 @@ const servicePath = require.resolve('../src/modules/matches/matches.service')
 const loadService = (fakeDb) => {
   const originalQuery = fakeDb.query.bind(fakeDb)
   fakeDb.query = async (sql, params) => {
+    if (sql.includes('GET_LOCK(')) return [[{ acquired: 1 }]]
+    if (sql.includes('RELEASE_LOCK(')) return [[{ released: 1 }]]
+    if (sql.includes('DATE_SUB(?, INTERVAL 1 DAY)')) return [[]]
+    if (sql === 'SELECT id,jugador1_id,jugador2_id FROM equipos_padel WHERE id IN (?)') return [[]]
     if (sql.startsWith('SELECT tipo, participante_id, retirado, version FROM torneo_retiros')) return [[]]
     if (sql === 'SELECT id FROM torneos WHERE id=? FOR UPDATE') return [[{ id: params[0] }]]
     return originalQuery(sql, params)
@@ -32,18 +36,18 @@ for (const scenario of [
 ]) {
   test(`edición de participantes rechaza ${scenario.name} sin escribir`, async () => {
     const service = loadService({ async query(sql) {
-      if (sql.includes('SELECT * FROM partidos')) return [[{ id: 1, juez_id: 5, deporte: 'tenis', jugador1_id: 10, jugador2_id: 11 }]]
+      if (sql.includes('SELECT * FROM partidos')) return [[{ id: 1, juez_id: 5, estado: 'programado', control_version: 0, deporte: 'tenis', jugador1_id: 10, jugador2_id: 11 }]]
       if (sql.includes('FROM jugadores')) return [scenario.found]
       throw new Error('No debe escribir ni consultar el resultado')
     } })
-    await assert.rejects(service.updateParticipants(1, scenario.data, { id: 5, rol: 'juez' }), (err) => err.status === 400)
+    await assert.rejects(service.updateParticipants(1, { ...scenario.data, expected_control_version: 0 }, { id: 5, rol: 'juez' }), (err) => err.status === 400)
   })
 }
 
 test('edición de participantes guarda un jugador registrado y activo', async () => {
   let saved = false
   const service = loadService({ async query(sql, params) {
-    if (sql.includes('SELECT * FROM partidos')) return [[{ id: 1, juez_id: 5, deporte: 'tenis', jugador1_id: 10, jugador2_id: 11 }]]
+    if (sql.includes('SELECT * FROM partidos')) return [[{ id: 1, juez_id: 5, estado: 'programado', control_version: 0, deporte: 'tenis', jugador1_id: 10, jugador2_id: 11 }]]
     if (sql.includes('FROM jugadores')) {
       assert.match(sql, /activo = TRUE/)
       assert.deepEqual(params, [12, 11, 'tenis'])
@@ -53,7 +57,7 @@ test('edición de participantes guarda un jugador registrado y activo', async ()
     throw new Error(sql)
   } })
   service.getById = async () => ({ id: 1 })
-  await service.updateParticipants(1, { jugador1_id: 12 }, { id: 5, rol: 'juez' })
+  await service.updateParticipants(1, { jugador1_id: 12, expected_control_version: 0 }, { id: 5, rol: 'juez' })
   assert.equal(saved, true)
 })
 
@@ -63,7 +67,7 @@ for (const modality of ['individual', 'dobles']) {
     const fakeDb = {
       async query(sql, params) {
         calls.push({ sql, params })
-        if (/SELECT id, juez_id, created_by FROM partidos/.test(sql)) return [[{ id: 77 }]]
+        if (/SELECT \* FROM partidos/.test(sql)) return [[{ id: 77, estado: 'programado', control_version: 0 }]]
         if (/FROM categorias/.test(sql)) return [[{ id: 3 }]]
         if (/FROM jugadores/.test(sql) || /SELECT id\s+FROM equipos_padel/.test(sql)) {
           return [[{ id: 10 }, { id: 11 }]]
@@ -85,7 +89,7 @@ for (const modality of ['individual', 'dobles']) {
       ...(modality === 'dobles' ? { equipo1_id: 10, equipo2_id: 11 } : { jugador1_id: 10, jugador2_id: 11 }),
     }
     const created = await service.create(body, { id: 1, rol: 'admin' })
-    const updated = await service.update(77, body, { id: 1, rol: 'admin' })
+    const updated = await service.update(77, { ...body, expected_control_version: 0 }, { id: 1, rol: 'admin' })
     assert.equal(created.torneo, null)
     assert.equal(updated.modalidad, modality)
     const insert = calls.find((call) => /INSERT INTO partidos/.test(call.sql))
@@ -347,6 +351,8 @@ test('updateMarcador permite guardar más de tres sets', async () => {
         async query(sql, params) {
           connectionCalls.push({ sql, params })
           if (/INSERT INTO sets_partido/.test(sql)) writtenSets.push(params[1])
+          if (/SELECT \* FROM partidos/.test(sql)) return [[{ id: 7, estado: 'programado', jugador1_id: 10, jugador2_id: 11 }]]
+          if (/SELECT \* FROM sets_partido/.test(sql)) return [[]]
         },
         async commit() {},
         async rollback() {},
@@ -367,6 +373,8 @@ test('updateMarcador permite guardar más de tres sets', async () => {
   })
 
   assert.deepEqual(writtenSets, [1, 2, 3, 4])
+  const audited = connectionCalls.find(call => /INSERT INTO auditoria_ediciones/.test(call.sql))
+  assert.equal(JSON.parse(audited.params[4]).cambios.sets.despues.length, 4)
   const deleteCall = connectionCalls.find((call) => /DELETE FROM sets_partido/.test(call.sql))
   assert.ok(deleteCall)
   assert.deepEqual(deleteCall.params, [7, 1, 2, 3, 4])

@@ -9,6 +9,7 @@ import AdminRoute from './AdminRoute'
 import OfficialRoute from './OfficialRoute'
 import DirectorRoute from './DirectorRoute'
 import JudgeLayout from '../layouts/JudgeLayout'
+import TrafficMeasurement from '../components/common/TrafficMeasurement'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -49,10 +50,14 @@ const Support = lazy(() => import('../pages/Support'))
 
 // ── Admin ─────────────────────────────────────────────────
 const Dashboard = lazy(() => import('../pages/admin/Dashboard'))
+const AuditHistory = lazy(() => import('../pages/admin/AuditHistory'))
 const GestionJugadores = lazy(() => import('../pages/admin/GestionJugadores'))
 const GestionEquipos = lazy(() => import('../pages/admin/GestionEquipos'))
 const GestionTorneos = lazy(() => import('../pages/admin/GestionTorneos'))
 const GestionPartidos = lazy(() => import('../pages/admin/GestionPartidos'))
+const CourtAgenda = lazy(() => import('../pages/admin/CourtAgenda'))
+const Caddies = lazy(() => import('../pages/admin/Caddies'))
+const Traffic = lazy(() => import('../pages/admin/Traffic'))
 const GestionAnuncios = lazy(() => import('../pages/admin/GestionAnuncios'))
 const GestionSedes = lazy(() => import('../pages/admin/GestionSedes'))
 const GestionCategorias = lazy(() => import('../pages/admin/GestionCategorias'))
@@ -69,21 +74,23 @@ const JuezPartidos = lazy(() => import('../pages/judge/JuezPartidos'))
 export default function AppRouter() {
   const { user, isAuthenticated } = useAuthStore()
   const { pathname } = useLocation()
-  // Un juez estándar tiene solo /juez, /juez/perfil y la ayuda
-  if (isAuthenticated && user?.rol === 'juez' && !['/juez', '/juez/perfil', '/ayuda', '/soporte'].includes(pathname)) {
+  const personalView = ['/mi-actividad', '/profile', '/settings', '/favorites', '/tennis', '/live'].includes(pathname) || /^\/(match|torneo|player|team)\/\d+$/.test(pathname)
+  // Personal views do not grant official or administrative capabilities.
+  if (isAuthenticated && user?.rol === 'juez' && !personalView && !['/juez', '/juez/caddies', '/juez/perfil', '/ayuda', '/soporte'].includes(pathname)) {
     return <Navigate to={pathname === '/profile' ? '/juez/perfil' : '/juez'} replace />
   }
   // Un juez director tiene acceso a su panel dedicado (/director), a la mesa (/juez), a su perfil y a la ayuda
   if (
     isAuthenticated &&
     user?.rol === 'juez_director' &&
-    !['/director', '/juez', '/juez/perfil', '/ayuda', '/soporte'].includes(pathname)
+    !personalView && !['/director', '/director/agenda', '/juez', '/juez/caddies', '/juez/perfil', '/ayuda', '/soporte'].includes(pathname)
   ) {
     return <Navigate to='/director' replace />
   }
   return (
     <>
       <ScrollToTop />
+      <TrafficMeasurement />
       <Routes>
       {/* Auth */}
       <Route element={<AuthLayout />}>
@@ -99,6 +106,7 @@ export default function AppRouter() {
 
       {/* Consulta pública de marcadores */}
       <Route element={<AppLayout />}>
+        <Route path='/mi-actividad' element={<ProtectedRoute><PlayerDashboard key={user?.id} /></ProtectedRoute>} />
         <Route path='/' element={isAuthenticated && user?.rol === 'miembro' ? <PlayerDashboard key={user.id} /> : <Home />} />
         <Route path='/live' element={<Live />} />
         <Route path='/anuncios' element={<Anuncios />} />
@@ -146,6 +154,7 @@ export default function AppRouter() {
         }
       >
         <Route path='/director' element={<DirectorDashboard />} />
+        <Route path='/director/agenda' element={<CourtAgenda />} />
       </Route>
 
       {/* Control de cancha y mesa de juez */}
@@ -159,6 +168,7 @@ export default function AppRouter() {
         }
       >
         <Route path='/juez' element={<JuezPartidos />} />
+        <Route path='/juez/caddies' element={<Caddies />} />
         <Route path='/soporte' element={<Support />} />
         <Route path='/juez/perfil' element={<Profile />} />
         <Route path='/juez/partido/:id' element={<Navigate to='/juez' replace />} />
@@ -175,10 +185,14 @@ export default function AppRouter() {
         }
       >
         <Route path='/admin' element={<Dashboard />} />
+        <Route path='/admin/auditoria' element={<AuditHistory />} />
+        <Route path='/admin/caddies' element={<Caddies />} />
+        <Route path='/admin/visitas' element={<Traffic />} />
         <Route path='/admin/jugadores' element={<GestionJugadores />} />
         <Route path='/admin/equipos' element={<GestionEquipos />} />
         <Route path='/admin/torneos' element={<GestionTorneos />} />
         <Route path='/admin/partidos' element={<GestionPartidos />} />
+        <Route path='/admin/agenda' element={<CourtAgenda />} />
         <Route path='/admin/anuncios' element={<GestionAnuncios />} />
         <Route path='/admin/tickets' element={<Support />} />
         <Route path='/admin/sedes' element={<GestionSedes />} />

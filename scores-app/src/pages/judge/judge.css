@@ -1,5 +1,7 @@
 .judge-desk { max-width: 780px; margin: auto; display: flex; flex-direction: column; gap: 8px; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .judge-toolbar, .judge-status, .judge-score-heading, .judge-score-row, .judge-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.judge-toolbar { flex-wrap: wrap; }
+.judge-toolbar > button { overflow-wrap: anywhere; }
 .judge-tool { min-height: 44px; padding: 8px 10px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; border-radius: 10px; background: var(--bg-hover); }
 .judge-desk button:disabled, .judge-dialog button:disabled { opacity: .45; cursor: not-allowed; }
 .judge-desk button:focus-visible, .judge-dialog button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 2px; }

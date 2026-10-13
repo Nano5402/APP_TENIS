@@ -102,7 +102,7 @@ exports.get = async (id, conn = db) => {
       })),
   }
 }
-exports.save = async (id, groups, expectedVersion) => {
+exports.save = async (id, groups, expectedVersion, actor) => {
   if (!Array.isArray(groups) || groups.length > 200) fail('Envía hasta 200 grupos', 400)
   const seen = new Set(),
     teams = new Set()
@@ -206,6 +206,9 @@ exports.save = async (id, groups, expectedVersion) => {
         )
       }
     }
+    const audit = require('../audit/edit-audit')
+    await audit.record(conn, 'grupos', id, actor, audit.groupsSnapshot(oldGroups, old),
+      audit.groupsSnapshot(normalized, normalized.flatMap(g => g.equipo_ids.map(equipo_id => ({ equipo_id, categoria_id: g.categoria_id, grupo: g.nombre })))))
     await conn.commit()
     return await exports.get(id, conn)
   } catch (e) {

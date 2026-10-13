@@ -103,7 +103,7 @@ export default function MatchStats({ matchId, player1, player2, initialStats = n
     <div className='space-y-4'>
       {walkover && <ClosureCard info={walkover} player1={player1} player2={player2} />}
       {hasCorrections && <p className='text-xs rounded-lg p-3 bg-amber-500/10'>Este marcador tiene correcciones supervisadas. Las estadísticas conservan los puntos registrados y pueden no coincidir con los games corregidos.</p>}
-      <p className='text-xs' style={{ color: 'var(--text-muted)' }}>Solo incluye acciones confirmadas por el servidor. Los aces y errores dependen de los motivos registrados por el juez. El porcentaje de primeros saques se calcula sobre los puntos con servicio registrado.</p>
+      <p className='text-xs' style={{ color: 'var(--text-muted)' }}>Estadísticas basadas en los puntos y saques registrados por el juez.</p>
       <details className='rounded-xl p-3 text-xs' style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>
         <summary className='cursor-pointer font-semibold py-1'>¿Qué significa cada indicador?</summary>
         <dl className='mt-3 space-y-2'>

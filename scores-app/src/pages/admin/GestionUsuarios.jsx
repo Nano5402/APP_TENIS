@@ -52,8 +52,8 @@ export default function GestionUsuarios() {
   const createUser = async (data) => {
     setCreateError(null)
     try {
-      if (data.rol === 'miembro' && playerLink.modo === 'existente' && !playerLink.id) throw new Error('Selecciona el jugador que corresponde a esta cuenta')
-      await userService.create({ ...data, usuario: data.usuario?.trim() || undefined, jugador: data.rol === 'miembro' ? playerLink : undefined })
+      if (playerLink.modo === 'existente' && !playerLink.id) throw new Error('Selecciona el jugador que corresponde a esta cuenta')
+      await userService.create({ ...data, usuario: data.usuario?.trim() || undefined, jugador: playerLink })
       addToast({ type: 'success', title: 'Usuario creado correctamente' })
       reset({ rol: 'miembro' })
       setPlayerLink({ modo: 'ninguno', deporte: 'tenis' })
@@ -277,7 +277,7 @@ export default function GestionUsuarios() {
               </select>
             </label>
           </div>
-          {creatingMember && <MemberPlayerFields value={playerLink} onChange={setPlayerLink} nombre={watch('nombre')} apellido={watch('apellido')} onSelectPlayer={(p) => { setValue('nombre', p.nombre, { shouldValidate: true }); setValue('apellido', p.apellido, { shouldValidate: true }) }} />}
+          <MemberPlayerFields value={playerLink} onChange={setPlayerLink} nombre={watch('nombre')} apellido={watch('apellido')} onSelectPlayer={(p) => { setValue('nombre', p.nombre, { shouldValidate: true }); setValue('apellido', p.apellido, { shouldValidate: true }) }} />
           <div className='flex justify-end'>
             <Button type='submit' loading={isSubmitting}>
               Crear usuario

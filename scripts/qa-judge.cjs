@@ -7,13 +7,245 @@ const os = require('node:os')
 const sharp = require('../scores-api/node_modules/sharp')
 const { createInitialState, applyEvent, serializeState } = require('../scores-api/src/modules/matches/score.engine')
 
+async function checkAuditHistory(browser) {
+  const page = await browser.newPage()
+  const user = { id:99, rol:'admin', nombre:'QA', apellido:'Prueba', email:'qa@example.com', numero_documento:'12345678' }
+  let fail = false
+  const errors = []
+  page.on('pageerror', e => errors.push(e.message))
+  await page.addInitScript(u => localStorage.setItem('auth-storage-v2', JSON.stringify({ state:{isAuthenticated:true,user:u},version:0 })), user)
+  await page.route('**/*', route => {
+    const url = new URL(route.request().url()), endpoint = url.pathname.replace(/^\/api/, '')
+    if (!url.pathname.startsWith('/api/')) return url.hostname === '127.0.0.1' ? route.continue() : route.abort()
+    const data = endpoint === '/auditoria' ? { items:[{ key:'0:1',tipo:'retiros',accion:'Retiro',fecha:'2026-10-01T14:00:00Z',autor:'QA Prueba',actor_id:99,entidad:'torneo',registro_id:5,detalle:{motivo:'Motivo de prueba',participante:21} }],siguiente:null } : endpoint.endsWith('/me') ? user : []
+    if (endpoint === '/auditoria' && url.searchParams.get('tipo') === 'ediciones') Object.assign(data.items[0], { tipo:'ediciones',accion:'Edición administrativa',detalle:{cambios:{cancha_id:{antes:1,despues:3}}} })
+    return route.fulfill({status:fail && endpoint === '/auditoria' ? 503 : 200,contentType:'application/json',body:JSON.stringify({ok:true,data})})
+  })
+  try {
+    await page.goto('http://127.0.0.1:4173/admin/auditoria')
+    await page.getByRole('button',{name:'Ver registro'}).waitFor()
+    for (const width of [320,390,1440]) {
+      await page.setViewportSize({width,height:900})
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth+1),true)
+    }
+    await page.getByRole('button',{name:'Ver registro'}).click()
+    await page.getByText('Motivo de prueba',{exact:true}).waitFor()
+    await page.getByRole('button',{name:'Cerrar ventana'}).click()
+    await page.getByLabel('Actividad',{exact:true}).selectOption('retiros')
+    await page.getByRole('button',{name:'Ver registro'}).waitFor()
+    fail = true
+    await page.getByRole('button',{name:'Actualizar',exact:true}).click()
+    await page.getByRole('button',{name:'Reintentar'}).waitFor()
+    fail = false
+    await page.getByRole('button',{name:'Reintentar'}).click()
+    await page.getByRole('button',{name:'Ver registro'}).waitFor()
+    await page.getByLabel('Actividad',{exact:true}).selectOption('ediciones')
+    await page.getByRole('button',{name:'Ver registro'}).click()
+    await page.getByText('Antes',{exact:true}).waitFor()
+    await page.getByText('Después',{exact:true}).waitFor()
+    for (const width of [320,390,1440]) {
+      await page.setViewportSize({width,height:900})
+      assert.equal(await page.getByRole('dialog').evaluate(el => el.scrollWidth <= el.clientWidth + 1),true)
+    }
+    await page.getByRole('button',{name:'Cerrar ventana'}).click()
+    assert.deepEqual(errors,[])
+    console.log('Audit history: responsive, detail, filtering and retry OK')
+  } finally { await page.close() }
+}
+
+async function checkCourtAgenda(browser) {
+  const page = await browser.newPage()
+  const user = { id: 99, rol: 'admin', nombre: 'QA', apellido: 'Prueba', email: 'qa@example.com', numero_documento: '12345678' }
+  const errors = []; let fail = false, enabled = true
+  page.on('pageerror', e => errors.push(e.message))
+  await page.addInitScript(u => localStorage.setItem('auth-storage-v2', JSON.stringify({ state: { isAuthenticated: true, user: u }, version: 0 })), user)
+  await page.route('**/*', route => {
+    const req = route.request(), url = new URL(req.url()), endpoint = url.pathname.replace(/^\/api/, '')
+    if (!url.pathname.startsWith('/api/')) return url.hostname === '127.0.0.1' ? route.continue() : route.abort()
+    const respond = (data, status=200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify({ ok: status===200, data, message: 'Error QA' }) })
+    if (endpoint === '/partidos') return respond([1,2].map(id => ({ id, estado: 'programado', hora_inicio: `${id+8}:00:00`, cancha: id===1 ? { id:1,nombre:'Cancha 1' } : null, jugador1:{nombre:'Ana',apellido:'Prueba'}, jugador2:{nombre:'Luisa',apellido:'Prueba'} })), fail ? 503 : 200)
+    if (endpoint === '/notificaciones/preferencias') { if (req.method()==='PUT') enabled=req.postDataJSON().cambios_partidos; return respond({ cambios_partidos:enabled }) }
+    if (endpoint === '/notificaciones') return respond({items:[],pendientes:0})
+    return respond(endpoint.endsWith('/me') ? user : [])
+  })
+  try {
+    await page.goto('http://127.0.0.1:4173/admin/agenda')
+    await page.getByText('2 encuentros', {exact:false}).waitFor()
+    for (const width of [320,390,1440]) {
+      await page.setViewportSize({ width, height:900 })
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth+1), true)
+      assert.equal(await page.locator('article:visible').count(), 2)
+    }
+    await page.getByLabel('Cancha de la agenda').selectOption('none')
+    assert.equal(await page.locator('article:visible').count(), 1)
+    fail=true
+    await page.getByRole('button',{name:'Actualizar',exact:true}).click()
+    await page.getByRole('alert').waitFor()
+    assert.equal(await page.locator('article:visible').count(), 0)
+    fail=false
+    await page.getByRole('button',{name:'Actualizar',exact:true}).click()
+    await page.locator('article:visible').waitFor()
+    await page.getByRole('button',{name:'Notificaciones',exact:true}).click()
+    const toggle = page.getByRole('checkbox',{name:/Avisarme de cambios/})
+    await toggle.click()
+    await page.waitForFunction(() => { const el=document.querySelector('input[type=checkbox]'); return el && !el.disabled && !el.checked })
+    assert.equal(enabled,false)
+    assert.deepEqual(errors,[])
+    console.log('PASS: agenda 320/390/1440px, court filter, error/retry and notification preference')
+  } finally { await page.close() }
+}
+
+async function checkCombinedActivity(browser) {
+  for (const rol of ['juez', 'juez_director']) {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+    const user = { id: 99, rol, nombre: 'QA', apellido: 'Prueba', email: 'qa@example.com', numero_documento: '12345678' }
+    const errors=[]
+    page.on('pageerror', e => errors.push(e.message))
+    await page.addInitScript(u => localStorage.setItem('auth-storage-v2', JSON.stringify({ state: { isAuthenticated:true,user:u },version:0 })),user)
+    await page.route('**/*', route => {
+      const url=new URL(route.request().url()), endpoint=url.pathname.replace(/^\/api/,'')
+      if (!url.pathname.startsWith('/api/')) return url.hostname==='127.0.0.1' ? route.continue() : route.abort()
+      const data=endpoint.endsWith('/me') ? user : endpoint==='/partidos/mios' ? { jugador:{id:9},historial:[],proximos:[],en_vivo:[] } : endpoint==='/notificaciones' ? {items:[],pendientes:0} : []
+      return route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,data})})
+    })
+    try {
+      await page.goto('http://127.0.0.1:4173/mi-actividad')
+      await page.getByRole('heading',{name:'Tu próximo partido'}).waitFor()
+      assert.match(page.url(),/mi-actividad$/)
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth<=innerWidth+1),true)
+      if (rol==='juez_director') {
+        await page.goto('http://127.0.0.1:4173/director/agenda')
+        await page.getByRole('heading',{name:'Agenda por cancha'}).waitFor()
+      }
+      assert.deepEqual(errors,[])
+    } finally { await page.close() }
+  }
+  console.log('PASS: judge/player activity and director agenda access on mobile')
+}
+
+async function checkBracket(browser) {
+  const page=await browser.newPage({viewport:{width:390,height:844}}), errors=[]
+  page.on('pageerror',e=>errors.push(e.message))
+  const tournament={id:1,nombre:'Torneo de prueba',deporte:'tenis',modalidad:'dobles',estado:'en_curso',sistema:'grupos_eliminacion'}
+  const matches=[{id:1,ronda:'Semifinales',estado:'finalizado',ganador:'jugador1',equipo1:{id:1,nombre:'ANA / LUISA'},equipo2:{id:2,nombre:'MARÍA / LUZ'},sets:[{numero_set:1,games_j1:6,games_j2:3}]},{id:2,ronda:'Final',estado:'programado',origen_partido1:{id:1},equipo1:{id:1,nombre:'ANA / LUISA'}},{id:3,ronda:'Final',estado:'programado',categoria:{id:2,nombre:'Tercera'}}].map(m=>({fase:'eliminacion',modalidad:'dobles',categoria:{id:1,nombre:'Quinta'},...m}))
+  await page.route('**/*',route=>{
+    const url=new URL(route.request().url()),endpoint=url.pathname.replace(/^\/api/,'')
+    if(!url.pathname.startsWith('/api/')) return url.hostname==='127.0.0.1'?route.continue():route.abort()
+    const data=endpoint==='/torneos/1'?tournament:endpoint==='/partidos'?matches:endpoint.endsWith('/retiros')?{jugadores:[],parejas:[]}:[]
+    return route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,data})})
+  })
+  try {
+    await page.goto('http://127.0.0.1:4173/torneo/1?tab=bracket')
+    await page.getByRole('heading',{name:'Camino a la final'}).waitFor()
+    await page.getByLabel('Categoría del cuadro').selectOption('1')
+    for(const width of [320,390,1440]) {
+      await page.setViewportSize({width,height:900})
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true)
+    }
+    await page.setViewportSize({width:390,height:844})
+    await page.getByRole('button',{name:'Ronda siguiente'}).click()
+    await page.getByText('Participante por confirmar',{exact:true}).filter({visible:true}).waitFor()
+    assert.equal(await page.getByLabel('Ronda del cuadro').inputValue(),'Final')
+    await page.getByLabel('Categoría del cuadro').selectOption('2')
+    assert.equal(await page.locator('article:visible').count(),1)
+    assert.equal(await page.getByText('Revisar',{exact:false}).count(),0)
+    assert.deepEqual(errors,[])
+    await page.screenshot({path:path.join(os.tmpdir(),'tenis-bracket-mobile.png'),fullPage:true})
+    console.log('PASS: public bracket categories, mobile round navigation and 320/390/1440px layout')
+  } finally {await page.close()}
+}
+
+async function checkTournamentArchive(browser) {
+  const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[]
+  const user={id:99,rol:'admin',nombre:'QA',apellido:'Prueba',email:'qa@example.com',numero_documento:'12345678'}
+  const t={id:1,nombre:'Torneo Archivo QA',deporte:'tenis',modalidad:'dobles',sistema:'grupos_eliminacion',estado:'en_curso',partidos_count:8,inscripciones_count:16,archivado:false}
+  let writes=0, fail=true
+  page.on('pageerror',e=>errors.push(e.message))
+  await page.addInitScript(u=>localStorage.setItem('auth-storage-v2',JSON.stringify({state:{isAuthenticated:true,user:u},version:0})),user)
+  await page.route('**/*',route=>{
+    const req=route.request(),url=new URL(req.url()),endpoint=url.pathname.replace(/^\/api/,'')
+    if(!url.pathname.startsWith('/api/')) return url.hostname==='127.0.0.1'?route.continue():route.abort()
+    const respond=(data,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify({ok:status===200,data,message:'Error de archivo QA'})})
+    assert.notEqual(req.method(),'DELETE')
+    if(endpoint==='/torneos/1/archivo') {
+      if(fail) return respond(null,500)
+      t.archivado=req.postDataJSON().archivado;writes++
+      return respond({id:1,archivado:t.archivado})
+    }
+    return respond(endpoint.endsWith('/me')?user:endpoint==='/torneos'?[t]:endpoint==='/notificaciones'?{items:[],pendientes:0}:[])
+  })
+  try {
+    await page.goto('http://127.0.0.1:4173/admin/torneos')
+    await page.getByRole('heading',{name:t.nombre,exact:true}).waitFor()
+    await page.getByRole('button',{name:'Archivar torneo',exact:true}).click()
+    await page.getByRole('button',{name:'Archivar sin borrar',exact:true}).click()
+    await page.getByText('Error de archivo QA',{exact:true}).waitFor()
+    assert.equal(t.archivado,false)
+    fail=false
+    await page.getByRole('button',{name:'Archivar torneo',exact:true}).click()
+    await page.getByRole('button',{name:'Archivar sin borrar',exact:true}).click()
+    await page.getByRole('heading',{name:t.nombre,exact:true}).waitFor({state:'detached'})
+    await page.getByLabel('Archivo de torneos').selectOption('archivados')
+    await page.getByRole('heading',{name:t.nombre,exact:true}).waitFor()
+    for(const width of [320,390,1440]) {await page.setViewportSize({width,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true)}
+    await page.getByRole('button',{name:'Restaurar torneo',exact:true}).click()
+    await page.getByRole('dialog').getByRole('button',{name:'Restaurar torneo',exact:true}).click()
+    await page.getByRole('heading',{name:t.nombre,exact:true}).waitFor({state:'detached'})
+    await page.getByLabel('Archivo de torneos').selectOption('activos')
+    await page.getByRole('heading',{name:t.nombre,exact:true}).waitFor()
+    assert.equal(writes,2);assert.equal(t.estado,'en_curso');assert.equal(t.partidos_count,8)
+    assert.deepEqual(errors,[])
+    console.log('PASS: tournament archive/restore, failed-save retry, unchanged history and mobile layout')
+  } finally {await page.close()}
+}
+
+async function checkBulkResults(browser) {
+  const page=await browser.newPage({viewport:{width:390,height:844}}), errors=[], calls=[]
+  const user={id:99,rol:'admin',nombre:'QA',apellido:'Prueba',email:'qa@example.com',numero_documento:'12345678'}
+  let matches=[10,11,12,13].map(id=>({id,deporte:'tenis',modalidad:'individual',estado:'programado',jugador1:{id:1,nombre:'Ana',apellido:`Prueba ${id}`},jugador2:{id:2,nombre:'Luisa',apellido:'Prueba'},sets:[],formato:{}}))
+  page.on('pageerror',e=>errors.push(e.message))
+  await page.addInitScript(u=>localStorage.setItem('auth-storage-v2',JSON.stringify({state:{isAuthenticated:true,user:u},version:0})),user)
+  await page.route('**/*',route=>{
+    const req=route.request(),url=new URL(req.url()),endpoint=url.pathname.replace(/^\/api/,'')
+    if(!url.pathname.startsWith('/api/')) return url.hostname==='127.0.0.1'?route.continue():route.abort()
+    const respond=(data,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify({ok:status===200,data,message:'Tiene dependencias'})})
+    if(req.method()==='DELETE') {
+      const id=Number(endpoint.split('/').at(-1));calls.push(id)
+      if(id===11)return respond(null,409)
+      if(id===12)return respond(null,503)
+      matches=matches.filter(m=>m.id!==id);return respond({ok:true})
+    }
+    return respond(endpoint.endsWith('/me')?user:endpoint==='/partidos'?matches:endpoint==='/notificaciones'?{items:[],pendientes:0}:[])
+  })
+  try {
+    await page.goto('http://127.0.0.1:4173/admin/partidos')
+    await page.getByText('Selección múltiple · 0 seleccionados',{exact:true}).click()
+    await page.getByRole('button',{name:'Seleccionar visibles (4)',exact:true}).click()
+    await page.getByRole('button',{name:'Revisar eliminación (4)',exact:true}).click()
+    const dialog=page.getByRole('dialog',{name:'Vista previa de eliminación'})
+    assert.equal(calls.length,0)
+    assert.equal(await dialog.getByRole('button',{name:'Eliminar 4 registros',exact:true}).isDisabled(),true)
+    for(const width of [320,390,1440]) {await page.setViewportSize({width,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,JSON.stringify(await page.evaluate(()=>[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1).slice(-12).map(e=>({tag:e.tagName,cls:e.className,text:e.textContent.slice(0,60)})))))}
+    await dialog.getByLabel('Confirmar eliminación múltiple').fill('ELIMINAR')
+    await dialog.getByRole('button',{name:'Eliminar 4 registros',exact:true}).click()
+    await dialog.waitFor({state:'detached'})
+    const result=page.getByRole('region',{name:'Resultado del lote'})
+    await result.getByText('1 eliminados · 1 no eliminados · 1 por verificar · 1 sin procesar',{exact:true}).waitFor()
+    assert.deepEqual(calls,[10,11,12])
+    assert.equal(await page.getByRole('dialog').count(),0)
+    await page.getByText('Selección múltiple · 2 seleccionados',{exact:true}).waitFor()
+    assert.deepEqual(errors,[])
+    console.log('PASS: bulk preview, explicit confirmation, partial failures, uncertain response stops batch and pending selection retained')
+  } finally {await page.close()}
+}
+
 async function checkMatchEditing(browser) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   const admin = { id: 99, rol: 'admin', nombre: 'Admin', apellido: 'QA', email: 'qa@example.com', numero_documento: '12345678' }
   const categoria = { id: 1, nombre: 'Cuarta', deporte: 'tenis' }
   const torneo = { id: 1, nombre: 'Torneo QA', deporte: 'tenis', modalidad: 'dobles', sistema: 'grupos_eliminacion', estado: 'activo' }
   const teams = [1, 2, 3, 4].map(id => ({ id, nombre: `Pareja ${id}`, deporte: 'tenis', categoria }))
-  const matches = [0, 1].map(i => ({ id: i + 10, torneo, categoria, modalidad: 'dobles', deporte: 'tenis', estado: 'programado', fase: 'grupos', grupo: `GRUPO ${i + 1}`, equipo1: teams[i * 2], equipo2: teams[i * 2 + 1], formato: {}, sets: [] }))
+  const matches = [0, 1].map(i => ({ id: i + 10, control_version: 0, torneo, categoria, modalidad: 'dobles', deporte: 'tenis', estado: 'programado', fase: 'grupos', grupo: `GRUPO ${i + 1}`, equipo1: teams[i * 2], equipo2: teams[i * 2 + 1], formato: {}, sets: [] }))
   const distribution = {
     grupos: [1, 2].map(n => ({ nombre: `GRUPO ${n}`, categoria_id: 1, equipo_ids: [n * 2 - 1, n * 2] })),
     parejas: teams.map(t => ({ equipo_id: t.id, categoria_id: 1, grupo: `GRUPO ${Math.ceil(t.id / 2)}` })),
@@ -31,13 +263,17 @@ async function checkMatchEditing(browser) {
       if (failSave) return respond(null, 500)
       const saved = matches.find(m => m.id === Number(endpoint.split('/').at(-1)))
       const body = req.postDataJSON()
+      assert.ok(Number.isSafeInteger(body.expected_control_version))
+      if (body.expected_control_version !== saved.control_version) return respond(null, 409)
       assert.equal(body.grupo, saved.grupo)
       assert.equal(Number(body.equipo1_id), saved.equipo1.id)
       assert.equal(Number(body.equipo2_id), saved.equipo2.id)
       saved.notas = body.notas
+      saved.control_version++
       writes++
       return respond(saved)
     }
+    if (endpoint === '/partidos/gestion/programacion') return respond({ conflicts: [], warnings: [] })
     assert.equal(req.method(), 'GET')
     if (endpoint.endsWith('/grupos')) {
       await new Promise(resolve => setTimeout(resolve, 350))
@@ -70,6 +306,16 @@ async function checkMatchEditing(browser) {
     await modal.getByRole('button', { name: 'Guardar cambios' }).click()
     await modal.waitFor({ state: 'detached' })
     assert.equal(writes, 4)
+    await page.getByRole('button', { name: 'Editar datos del partido', exact: true }).first().click()
+    await modal.locator('select[name="grupo"]:not([disabled])').waitFor()
+    await modal.locator('[name="notas"]').fill('Borrador que no debe perderse')
+    matches[0].control_version++ // Another administrator saved after this form was opened.
+    await modal.getByRole('button', { name: 'Guardar cambios' }).click()
+    await modal.getByRole('alert').filter({ hasText: 'Error simulado QA' }).waitFor()
+    assert.equal(await modal.locator('[name="notas"]').inputValue(), 'Borrador que no debe perderse')
+    assert.equal(writes, 4)
+    await modal.getByRole('button', { name: 'Cerrar modal', exact: true }).click()
+    await modal.waitFor({ state: 'detached' })
     failGroups = true
     await page.getByRole('button', { name: 'Editar datos del partido', exact: true }).first().click()
     await modal.getByText(/Error simulado QA/).waitFor()
@@ -152,6 +398,12 @@ async function checkTournamentRetirements(browser) {
 ;(async () => {
   const browser = await chromium.launch({ headless: true, channel: 'chrome' })
   try {
+    await checkAuditHistory(browser)
+    await checkCourtAgenda(browser)
+    await checkBracket(browser)
+    await checkTournamentArchive(browser)
+    await checkBulkResults(browser)
+    await checkCombinedActivity(browser)
     await checkMatchEditing(browser)
     await checkTournamentRetirements(browser)
     if (process.env.QA_MATCH_EDIT_ONLY === '1') return
@@ -161,7 +413,7 @@ async function checkTournamentRetirements(browser) {
     page.on('pageerror', error => failures.push(error.message))
     page.on('dialog', dialog => { if (dialog.type() === 'beforeunload') void dialog.accept() })
     const user = { id: 12, rol: 'juez', nombre: 'Juez', apellido: 'Prueba', email: 'juez-qa@example.com', numero_documento: '12345678' }
-    let match = { id: 30, juez_id: 12, modalidad: 'singles', estado: 'en_vivo', jugador1: { nombre: 'Carlos', apellido: 'Rodríguez' }, jugador2: { nombre: 'Andrés', apellido: 'Martínez' }, cancha: { nombre: 'Cancha 1' }, formato: { mejor_de_sets: 3, juegos_por_set: 6 } }
+    let match = { id: 30, juez_id: 12, control_version: 0, modalidad: 'singles', estado: 'en_vivo', jugador1: { nombre: 'Carlos', apellido: 'Rodríguez' }, jugador2: { nombre: 'Andrés', apellido: 'Martínez' }, cancha: { id: 1, nombre: 'Cancha 1' }, formato: { mejor_de_sets: 3, juegos_por_set: 6 } }
     let state = createInitialState(), events = [], snapshots = [], posts = 0, reads = 0, drop = false, sequence = 0
     const receipts = new Set()
     let paused = false, logoutCalls = 0
@@ -184,7 +436,7 @@ async function checkTournamentRetirements(browser) {
           const field = name => body.match(new RegExp(`name="${name}"\\r\\n\\r\\n([^\\r]*)`))?.[1] || ''
           assert.equal(field('consentimiento'), 'true')
           assert.equal(field('expected'), photo?.version || '')
-          photo = { version: field('version'), momento: field('momento') }; photoWrites++; data = photo
+          photo = { version: field('version'), momento: field('momento'), encuadre: JSON.parse(field('encuadre') || 'null') }; photoWrites++; data = photo
         }
         else if (endpoint.endsWith('/foto')) data = photo
         else if (endpoint === '/partidos/gestion/mis-partidos') data = [match]
@@ -205,12 +457,24 @@ async function checkTournamentRetirements(browser) {
           data = control()
         } else if (endpoint.endsWith('/deshacer')) { state = snapshots.pop(); events.shift(); data = control() }
         else if (endpoint.endsWith('/pausa')) { paused = req.postDataJSON().pausado; data = control() }
+        else if (endpoint === '/sedes') data = [{ id: 1, nombre: 'Club Unión' }]
+        else if (endpoint === '/sedes/1/canchas') data = [{ id: 1, nombre: 'Cancha 1', deporte: 'tenis', activa: true }, { id: 2, nombre: 'Cancha 2', deporte: 'tenis', activa: true }]
+        else if (endpoint.endsWith('/reasignar-cancha')) {
+          assert.equal(req.postDataJSON().expected_control_version, match.control_version)
+          match = { ...match, control_version: match.control_version + 1, cancha: { id: 2, nombre: 'Cancha 2' } }; data = match
+        }
         else if (endpoint.endsWith('/estadisticas')) data = { estadisticas: { jugador1: { puntos_ganados: 1 }, jugador2: { puntos_ganados: 1 } }, total_sets: 1 }
         else if (endpoint === '/users/me') data = user
         else data = {}
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data }) })
       }
       if (url.hostname !== '127.0.0.1') return route.abort()
+      if (req.resourceType() === 'document') {
+        const response = await route.fetch()
+        const { imgSrc } = require('../scores-api/src/config/securityHeaders').contentSecurityPolicy.directives
+        // Vite uses a separate mocked API origin; production serves /api on self.
+        return route.fulfill({ response, headers: { ...response.headers(), 'content-security-policy': `img-src ${imgSrc.join(' ')} http://localhost:3001 http://127.0.0.1:3001` } })
+      }
       return route.continue()
     }
     await page.route('**/*', mockRoute)
@@ -220,6 +484,22 @@ async function checkTournamentRetirements(browser) {
     }
     await page.goto('http://127.0.0.1:4173/sponsors')
     await page.waitForURL('**/juez')
+    const statusFilters = page.getByRole('group', { name: 'Estado de los partidos' })
+    await statusFilters.waitFor()
+    for (const width of [320, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 })
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, `Judge list overflow at ${width}px`)
+      assert.equal(await statusFilters.evaluate(el => el.scrollWidth <= el.clientWidth + 1), true)
+      const boxes = await statusFilters.getByRole('button').evaluateAll(buttons => buttons.map(b => ({ top: b.getBoundingClientRect().top, height: b.getBoundingClientRect().height })))
+      assert.equal(new Set(boxes.map(b => Math.round(b.top))).size, width < 640 ? 2 : 1)
+      assert.ok(boxes.every(b => b.height >= 44))
+      for (const label of ['Finalizados', 'Cancelados', 'Todos', 'Programados']) {
+        const button = statusFilters.getByRole('button', { name: new RegExp(label) })
+        await button.click()
+        assert.equal(await button.getAttribute('aria-pressed'), 'true')
+      }
+    }
+    console.log('PASS: judge status filters wrap without overflow at 320/390/768/1440px and remain interactive')
     for (const mode of ['Individual', 'Dobles']) {
       const writesBefore = posts
       await page.getByRole('button', { name: `Práctica ${mode}`, exact: true }).click()
@@ -246,6 +526,12 @@ async function checkTournamentRetirements(browser) {
       assert.ok(metrics.bottom <= height, 'All primary controls visible without scrolling')
     }
     await page.setViewportSize({ width: 390, height: 844 })
+    await page.getByRole('button', { name: 'Confirmar o cambiar cancha', exact: true }).click()
+    const courtDialog = page.getByRole('dialog', { name: /cancha/ })
+    await courtDialog.getByRole('button', { name: /Cancha 2/ }).click()
+    await courtDialog.getByRole('button', { name: 'Confirmar cancha', exact: true }).click()
+    await courtDialog.waitFor({ state: 'hidden' })
+    await page.getByRole('button', { name: 'Confirmar o cambiar cancha', exact: true }).getByText('Cancha 2', { exact: true }).waitFor()
     const initialReads = reads
     assert.equal(await page.getByRole('checkbox', { name: /Registrar motivo/ }).isChecked(), true, 'Point detail defaults on')
     await page.getByRole('checkbox', { name: /Registrar motivo/ }).uncheck()
@@ -326,6 +612,10 @@ async function checkTournamentRetirements(browser) {
     await page.getByRole('button', { name: 'Foto del partido', exact: true }).click()
     const photoDialog = page.locator('dialog[open]')
     await photoDialog.locator('input[type=file]').last().setInputFiles({ name: 'partido.jpg', mimeType: 'image/jpeg', buffer: photoBytes })
+    await photoDialog.getByLabel('Acercamiento', { exact: true }).fill('1.15')
+    await photoDialog.getByLabel('Horizontal', { exact: true }).fill('45')
+    await photoDialog.getByLabel('Vertical', { exact: true }).fill('60')
+    assert.equal(await photoDialog.getByAltText('Vista previa de la foto del partido').evaluate(el => el.style.transform), 'scale(1.15)')
     await photoDialog.getByRole('checkbox').check()
     await page.context().setOffline(true)
     await photoDialog.getByRole('button', { name: 'Guardar foto del partido' }).click()
@@ -344,6 +634,7 @@ async function checkTournamentRetirements(browser) {
     await settled()
     for (let attempt = 0; attempt < 60 && photoWrites === 0; attempt++) await page.waitForTimeout(500)
     assert.equal(photoWrites, 1, 'Photo survives reload and sends only once')
+    assert.deepEqual(photo.encuadre, { zoom: 1.15, x: 45, y: 60 }, 'Framing survives offline storage and reload')
     await page.getByRole('button', { name: 'Foto del partido', exact: true }).click()
     await photoDialog.locator('input[type=file]').last().setInputFiles({ name: 'final.jpg', mimeType: 'image/jpeg', buffer: photoBytes })
     await photoDialog.getByRole('combobox').selectOption('final')
@@ -380,7 +671,7 @@ async function checkTournamentRetirements(browser) {
     await page.getByRole('heading', { name: 'Mi perfil', exact: true }).waitFor()
     assert.equal(await page.locator('.sponsor-dock').count(), 0)
     assert.equal(await page.getByRole('heading', { name: 'Mis partidos', exact: true }).count(), 0)
-    for (const route of ['/pantalla', '/', '/admin', '/settings']) {
+    for (const route of ['/pantalla', '/', '/admin']) {
       await page.goto(`http://127.0.0.1:4173${route}`)
       await page.waitForURL('**/juez')
     }
@@ -404,6 +695,14 @@ async function checkTournamentRetirements(browser) {
     await publicPage.getByRole('button', { name: 'Ver este partido a detalle' }).first().click()
     await publicPage.getByRole('heading', { name: 'Estadísticas de los jugadores' }).waitFor()
     await publicPage.getByRole('heading', { name: 'Foto oficial del partido' }).waitFor()
+    const preview = publicPage.locator('.photocall-photo-img')
+    await preview.scrollIntoViewIfNeeded()
+    await preview.evaluate(image => image.decode())
+    assert.equal(new URL(await preview.getAttribute('src')).searchParams.has('miniatura'), false, 'Collapsed preview uses full resolution without a click')
+    assert.equal(await preview.evaluate(image => image.naturalWidth), 1200)
+    await publicPage.getByRole('button', { name: 'Ampliar foto', exact: true }).click()
+    await publicPage.getByRole('button', { name: 'Reducir foto', exact: true }).click()
+    assert.equal(new URL(await preview.getAttribute('src')).searchParams.has('miniatura'), false, 'Collapsing does not revert to thumbnail')
     await publicPage.getByRole('table', { name: 'Marcador de la foto' }).waitFor()
     for (const width of [320, 390, 768, 1440]) {
       await publicPage.setViewportSize({ width, height: 900 })

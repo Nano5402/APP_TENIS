@@ -1,23 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Download, Maximize2, SlidersHorizontal } from 'lucide-react'
+import { Download, Maximize2, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { useMatchRealtime } from '../../hooks/useMatchRealtime'
-import { getPhoto, photoUrl } from '../../services/matchPhotoService'
+import { getPhoto, photoUrl, removePhoto } from '../../services/matchPhotoService'
+import useAuthStore from '../../store/useAuthStore'
+import { confirm } from '../../utils/confirm'
 import { PHOTOCALL_SPONSORS } from '../../data/photocallSponsors'
 import { getParticipantName } from '../../utils/matchParticipants'
 import { exportMatchPhoto } from '../../utils/exportMatchPhoto'
 import './matchPhoto.css'
 
 export default function MatchPhoto({ matchId, match, dark = false }) {
+  const isAdmin = useAuthStore(store => store.user?.rol === 'admin')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [photo, setPhoto] = useState(null)
   const [expanded, setExpanded] = useState(false)
   const [failed, setFailed] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [downloadError, setDownloadError] = useState('')
   const [framing, setFraming] = useState(false)
-  const [crop, setCrop] = useState({ zoom: 1, x: 50, y: 50 })
+  const [manualCrop, setCrop] = useState(null)
+  const [dimensions, setDimensions] = useState(null)
+  // Legacy portrait photos receive a gentle, reversible zoom. Saved framing wins.
+  const portrait = dimensions?.version === photo?.version && dimensions?.height > dimensions?.width
+  const crop = manualCrop || photo?.encuadre || { zoom: portrait ? 1.15 : 1, x: 50, y: 50 }
   const cardRef = useRef(null)
   useEffect(() => {
-    setCrop({ zoom: 1, x: 50, y: 50 })
+    setCrop(null)
     setFraming(false)
   }, [matchId, photo?.version])
 
@@ -76,10 +85,27 @@ export default function MatchPhoto({ matchId, match, dark = false }) {
       link.remove()
       setTimeout(() => URL.revokeObjectURL(url), 60000)
     } catch (error) {
-      setDownloadError(error.message || 'No se pudo descargar el marco. Intenta nuevamente.')
+      setDownloadError(error.name === 'EncodingError'
+        ? 'No se pudo abrir una imagen para generar el marco. Recarga la página e intenta nuevamente.'
+        : error.message || 'No se pudo descargar el marco. Intenta nuevamente.')
     } finally {
       setDownloading(false)
     }
+  }
+
+  const handleDelete = async () => {
+    if (!isAdmin || !photo || deleting || downloading) return
+    const version = photo.version
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      if (!await confirm({ title: 'Eliminar foto del partido', message: 'Se eliminará la fotografía publicada. El partido y su marcador se conservarán. Esta acción no se puede deshacer.', danger: true, confirmLabel: 'Eliminar foto' })) return
+      await removePhoto(matchId, version)
+      setPhoto(null)
+    } catch (error) {
+      setDeleteError(error.message || 'No se pudo eliminar la foto. Intenta nuevamente.')
+      if (error.status === 409) refresh()
+    } finally { setDeleting(false) }
   }
 
   if (!photo) return null
@@ -97,7 +123,10 @@ export default function MatchPhoto({ matchId, match, dark = false }) {
         {failed ? <p role='status'>No se pudo cargar la fotografía. <button onClick={refresh}>Reintentar</button></p> :
           <button type='button' className='photocall-photo-btn' data-expanded={expanded || undefined} onClick={() => setExpanded(!expanded)} aria-label={expanded ? 'Reducir foto' : 'Ampliar foto'}>
             <span className='photocall-photo-backdrop' aria-hidden='true' style={{ backgroundImage: `url("${photoUrl(matchId, photo.version, true)}")` }} />
-            <img src={photoUrl(matchId, photo.version, !expanded && !framing)} alt='Jugadores del partido' loading='lazy' decoding='async' onError={() => setFailed(true)} className='photocall-photo-img' style={{ transform: `scale(${crop.zoom})`, transformOrigin: `${crop.x}% ${crop.y}%` }} />
+            {/* Native lazy loading requests the full photo near the viewport. The
+                thumbnail backdrop remains visible while it loads; never upscale
+                that thumbnail as the foreground, even in the collapsed view. */}
+            <img src={photoUrl(matchId, photo.version, false)} alt='Jugadores del partido' loading='lazy' decoding='async' onLoad={e => setDimensions({ version: photo.version, width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} onError={() => setFailed(true)} className='photocall-photo-img' style={{ transform: `scale(${crop.zoom})`, transformOrigin: `${crop.x}% ${crop.y}%` }} />
             <span className='photocall-expand' aria-hidden='true'><Maximize2 size={15} /></span>
           </button>}
       </div>
@@ -118,10 +147,12 @@ export default function MatchPhoto({ matchId, match, dark = false }) {
         {framing && <fieldset className='photocall-framing' disabled={downloading}>
           <legend>Encuadra a los jugadores</legend>
           <p>Acerca y mueve la foto sin cortar cabezas ni pies. Este ajuste solo se aplica a tu descarga; no cambia la foto guardada.</p>
-          {[['zoom', 'Acercamiento', 1, 2.5, .05], ['x', 'Posición horizontal', 0, 100, 1], ['y', 'Posición vertical', 0, 100, 1]].map(([key, label, min, max, step]) => <label key={key}>{label}<input type='range' min={min} max={max} step={step} value={crop[key]} disabled={key !== 'zoom' && crop.zoom === 1} onChange={e => setCrop(c => ({ ...c, [key]: Number(e.target.value) }))} /></label>)}
+          {[['zoom', 'Acercamiento', 1, 2.5, .05], ['x', 'Posición horizontal', 0, 100, 1], ['y', 'Posición vertical', 0, 100, 1]].map(([key, label, min, max, step]) => <label key={key}>{label}<input type='range' min={min} max={max} step={step} value={crop[key]} disabled={key !== 'zoom' && crop.zoom === 1} onChange={e => setCrop(c => ({ ...(c || crop), [key]: Number(e.target.value) }))} /></label>)}
           <button type='button' className='photocall-download-btn' onClick={() => setCrop({ zoom: 1, x: 50, y: 50 })}>Restablecer foto completa</button>
         </fieldset>}
-        <button type='button' className='photocall-download-btn' disabled={downloading} onClick={handleDownload}><Download size={14} /> {downloading ? 'Preparando imagen…' : 'Descargar foto con marco'}</button>{downloadError && <p role='alert'>{downloadError}</p>}
+        <button type='button' className='photocall-download-btn' disabled={downloading || deleting} onClick={handleDownload}><Download size={14} /> {downloading ? 'Preparando imagen…' : 'Descargar foto con marco'}</button>{downloadError && <p role='alert'>{downloadError}</p>}
+        {isAdmin && <button type='button' className='photocall-download-btn' disabled={deleting || downloading} onClick={handleDelete}><Trash2 size={14} /> {deleting ? 'Eliminando…' : 'Eliminar foto'}</button>}
+        {deleteError && <p role='alert'>{deleteError}</p>}
       </div>
     </section>
   )

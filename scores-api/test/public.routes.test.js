@@ -65,6 +65,8 @@ test('las consultas necesarias para ver marcadores no exigen autenticación', ()
 
 test('las operaciones de administración siguen protegidas', () => {
   const protectedWrites = [
+    [routes.partidos, 'get', '/gestion/pendientes', requireAdmin],
+    [routes.partidos, 'post', '/gestion/programacion', requireOfficial],
     [routes.torneos, 'post', '/:id/inscripciones', requireAdmin],
     [routes.torneos, 'put', '/:id/grupos', requireAdmin],
     [routes.torneos, 'delete', '/:id/inscripciones/:equipo_id', requireAdmin],

@@ -113,7 +113,9 @@ exports.getStats = async (id, setNumber = null) => {
 
 exports.startMatch = async (id, user) => {
   const connection = await db.getConnection()
+  let scheduleLocked = false
   try {
+    await require('./scheduling.service').lock(connection); scheduleLocked = true
     await connection.beginTransaction()
     const [[target]] = await connection.query('SELECT torneo_id FROM partidos WHERE id=?', [id])
     if (target?.torneo_id) await connection.query('SELECT id FROM torneos WHERE id=? FOR UPDATE', [target.torneo_id])
@@ -126,6 +128,7 @@ exports.startMatch = async (id, user) => {
     if (matches[0].estado === 'finalizado' || matches[0].estado === 'cancelado') {
       throw { status: 409, message: 'Este partido no se puede iniciar' }
     }
+    await require('./scheduling.service').assertAvailable({ ...matches[0], estado: 'en_vivo' }, connection)
     await ensureLiveState(connection, id)
     await connection.query(
       `UPDATE estado_en_vivo_partido
@@ -139,6 +142,7 @@ exports.startMatch = async (id, user) => {
     await connection.rollback()
     throw error
   } finally {
+    if (scheduleLocked) await require('./scheduling.service').unlock(connection)
     connection.release()
   }
   return exports.getControl(id, user)
@@ -168,6 +172,7 @@ exports.setPaused = async (id, paused, user, motivo) => {
         [id, user.id, paused ? (motivo === undefined ? 'pausar' : 'suspender') : 'reanudar', JSON.stringify({ motivo: motivo?.trim() || null })])
     }
     if (paused && !liveRows[0].pausado_at) {
+      if (motivo !== undefined) await require('./schedule-notifications').notify(connection, matches[0], ['El encuentro fue suspendido. Consulta su estado antes de dirigirte a la cancha.'])
       await connection.query(
         'UPDATE estado_en_vivo_partido SET pausado_at = NOW() WHERE partido_id = ?',
         [id]
@@ -669,6 +674,7 @@ exports.cancelMatch = async (id, body, user) => {
       [id, user.id, JSON.stringify({ motivo })]
     )
     await propagateWinner(connection, matches[0], 'cancelado', null)
+    await require('./schedule-notifications').notify(connection, matches[0], ['El encuentro fue cancelado.'])
     await connection.commit()
   } catch (error) {
     await connection.rollback()

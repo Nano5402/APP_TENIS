@@ -12,6 +12,8 @@ const pointReason = (result) => ({
 }[result] || 'punto_sin_detalle')
 
 export const matchService = {
+  getAttention: () => api.get('/partidos/gestion/pendientes'),
+  checkSchedule: data => api.post('/partidos/gestion/programacion', data),
   getAudit: (id, after = 0) => api.get(`/partidos/${id}/auditoria`, { params: { after } }),
   getAll: (params = {}) => api.get('/partidos', { params }),
   getById: (id) => api.get(`/partidos/${id}`),
@@ -64,5 +66,5 @@ export const matchService = {
   },
   undoPoint: async (id) => judgeResponse(await api.post(`/partidos/${id}/deshacer`)),
   finishLive: async (id) => judgeResponse(await api.get(`/partidos/${id}/control`)),
-  remove: (id) => api.delete(`/partidos/${id}`),
+  remove: (id, options) => api.delete(`/partidos/${id}`, options),
 }

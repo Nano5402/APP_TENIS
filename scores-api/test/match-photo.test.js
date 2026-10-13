@@ -22,6 +22,26 @@ test('photo inputs require UUID, moment and explicit publication confirmation', 
     assert.throws(() => validate({ ...input(), ...override }), e => e.status === 400)
   }
 })
+
+test('photo framing accepts bounded coordinates and rejects corrupt or unsafe values', () => {
+  validate({ ...input(), encuadre: JSON.stringify({ zoom: 1.2, x: 40, y: 60 }) })
+  for (const encuadre of ['oops', '{}', 'null', { zoom: 3, x: 50, y: 50 }, { zoom: 1, x: -1, y: 50 }, { zoom: '1', x: 50, y: 50 }]) {
+    assert.throws(() => validate({ ...input(), encuadre }), e => e.status === 400)
+  }
+})
+
+test('photo framing persists without cropping original pixels and survives retries', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'tenis-photo-frame-'))
+  try {
+    const fake = fixture(), service = createPhotoService(fake.db, directory), actor = { id: 3, rol: 'juez' }
+    const encuadre = { zoom: 1.3, x: 45, y: 60 }, item = { ...input(), encuadre: JSON.stringify(encuadre) }
+    const result = await service.save(1, actor, item, await source())
+    assert.deepEqual(result.encuadre, encuadre)
+    assert.equal((await sharp(await fs.readFile(service.file(item.version))).metadata()).width, 1600)
+    assert.deepEqual((await service.save(1, actor, item, await source())).encuadre, encuadre)
+    await assert.rejects(service.save(1, actor, { ...item, encuadre: '{"zoom":1,"x":50,"y":50}' }, await source()), e => e.status === 409)
+  } finally { await fs.rm(directory, { recursive: true, force: true }) }
+})
 test('decode real image, resize and strip metadata; reject forged content', async () => {
   const { full, thumb } = await normalize(await source())
   const meta = await sharp(full).metadata()
@@ -35,7 +55,7 @@ function fixture() {
     async query(sql, args) {
       if (sql.startsWith('SELECT id')) return [[{ id: 1, juez_id: 3 }]]
       if (sql.startsWith('SELECT')) return [row ? [{ ...row }] : []]
-      if (sql.startsWith('INSERT')) { writes++; row = { partido_id: args[0], version: args[1], momento: args[2], created_by: args[3], updated_at: 'now' }; return [{}] }
+      if (sql.startsWith('INSERT')) { writes++; row = { partido_id: args[0], version: args[1], momento: args[2], created_by: args[3], encuadre: args[5], updated_at: 'now' }; return [{}] }
       throw new Error(sql)
     },
     async getConnection() { return { query: db.query, beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release() {} } },

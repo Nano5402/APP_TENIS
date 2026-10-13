@@ -148,9 +148,6 @@ export default function TournamentStandings({ data, retirements }) {
           <summary className='font-semibold cursor-pointer'>
             {data.sin_grupo.length} parejas aún sin grupo
           </summary>
-          <p className='text-xs my-2'>
-            Siguen inscritas; se muestran aquí para que ninguna desaparezca.
-          </p>
           {data.sin_grupo.map((r) => (
             <p className='text-sm py-1' key={r.id}>
               {r.participante.nombre}

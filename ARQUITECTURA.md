@@ -33,4 +33,18 @@ Tickets y notificaciones (internas/push/recordatorios) NO se activan en esta ent
 
 ## Despliegue
 
+### Auditoría de ediciones administrativas
+
+Las ediciones generales y de participantes requieren `expected_control_version`, tomada al abrir el formulario. Se compara con la fila bloqueada antes de escribir; una versión ausente o desactualizada devuelve 409 sin cambios. Las ediciones de nombres visibles también incrementan la versión y guardan su auditoría. La edición general no permite sustituir participantes/orígenes ni cambiar el estado de partidos iniciados o cerrados; se mantienen las acciones supervisadas del director. Desplegar backend y frontend coordinadamente y recargar las sesiones antiguas: los formularios de versiones previas serán rechazados por seguridad hasta actualizarse.
+
+El arranque crea `auditoria_ediciones` de forma aditiva, sin borrar datos ni claves foráneas hacia los registros auditados. Desplegar primero el backend y esperar a que complete la migración, después el frontend. No ejecutar scripts de limpieza. El historial `/admin/auditoria` y su API son exclusivos para administradores.
+
+Se registran diferencias de las ediciones de partidos (incluidos participantes, horario, cancha, juez y configuración), torneos, distribución de grupos y marcador manual. Se usan listas explícitas de campos; no se almacenan contraseñas, tokens ni cuerpos completos de solicitudes. El actor proviene de la sesión del servidor. Los valores anterior/nuevo y la edición se guardan en la misma transacción: un fallo de auditoría revierte la edición. Guardar valores sin cambios no añade entradas. Las intervenciones del director mantienen su auditoría existente. Esta cobertura no incluye todas las entidades de la plataforma ni reconstruye cambios anteriores al despliegue; el historial no permite revertir automáticamente.
+
+### Archivo reversible de torneos
+
+El arranque añade `torneos.archivado_at` (nullable) y `auditoria_archivo_torneos`. Archivar/restaurar requiere administrador y guarda la marca y su auditoría en una transacción. No modifica el estado deportivo, partidos, inscripciones, fotos ni jugadores; no es un cierre ni una suspensión. Se mantiene la eliminación definitiva existente. La auditoría de archivo no tiene claves foráneas para conservarse tras una eliminación.
+
+El listado de torneos omite archivados por defecto; `archivo=archivados` y `archivo=todos` permiten consultarlos. Administración y directorio público tienen filtro de archivo y los enlaces directos siguen funcionando. La edición de un partido existente conserva el torneo archivado. Desplegar backend (con migración completada) y frontend; no ejecutar scripts de limpieza para esta actualización.
+
 La actualización de esquema existente agregará únicamente `anuncios.imagen_url` nullable si no existe. No ejecutar `reset_db.sql`. Imágenes bajo `UPLOAD_DIR/anuncios`; conservar la variable persistente de Hostinger. No se requieren claves nuevas ni dependencias adicionales.

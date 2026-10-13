@@ -10,11 +10,29 @@ Las solicitudes y respuestas conservan autoría: una cuenta con ese historial de
 
 ## Alcance de esta etapa
 
+### Agenda y cambios de programación
+
+Administración dispone de `/admin/agenda` y dirección de `/director/agenda`: lista cronológica móvil y columnas por cancha en escritorio, con fecha (Colombia), filtro de cancha y actualización manual. Incluye partidos sin cancha, pero los que no tienen fecha se revisan desde el panel de pendientes.
+
+Los cambios de fecha/hora, cancha, cancelación y suspensión desde mesa de juez generan avisos internos a las cuentas activas vinculadas a los participantes (incluidos ambos integrantes de cada pareja). No se envían motivos privados, correos ni push de estos cambios. En la campana se puede desactivar esta categoría. Guardar sin cambios no vuelve a notificar; aviso y edición se confirman juntos en una transacción. Los jugadores sin cuenta vinculada no reciben avisos.
+
+El arranque añade la tabla `preferencias_avisos` sin modificar registros existentes. Desplegar backend y frontend juntos. No se envían avisos retrospectivos.
+
 - Incluido: solicitudes, historial, respuesta y estado, campana interna para avisos de soporte.
 - Incluido: push opcional por dispositivo para avisos de soporte, sujeto a configuración del servidor y permiso del navegador.
 - Pendiente: recordatorios de partidos y avisos automáticos de asignación/inicio/finalización.
 - El envío requiere conexión. Si falla, el formulario conserva el texto mientras siga abierto y permite reintentar; no es una cola persistente sin conexión.
 - La prioridad urgente no sustituye contactar directamente al director del torneo.
+
+## Estadísticas de visitas
+
+- Desplegar API y frontend juntos. Al arrancar, el módulo prepara únicamente sus tablas `analytics_*`; si falla, responde como no disponible sin bloquear la aplicación. No hay importación de visitas anteriores.
+- Acceso: **Administración → Visitas**. Cuenta navegaciones de rutas públicas autorizadas, sin parámetros de URL. Excluye cuentas admin/juez/director, rutas privadas, robots reconocidos y preferencias DNT/GPC. Las pantallas se consultan por separado.
+- La medición está activa de forma predeterminada, sin solicitud de autorización ni controles visibles para desactivarla. Se conservan las desactivaciones previamente expresadas y se respetan DNT/GPC. El navegador conserva un identificador aleatorio hasta 180 días y una sesión de 30 minutos de inactividad; el servidor guarda hashes, nunca nombres, IP ni el referente completo. Bloqueadores, preferencias previas y fallos de conexión pueden reducir los conteos; no son el total de personas que acceden. El cliente no presenta esta activación automática como consentimiento explícito.
+- Vistas incluyen recargas; sesiones cuenta inicios; visitantes distintos se deduplican dentro del rango consultado solo en los últimos 90 días. Para rangos anteriores aparece “no disponible”, nunca una suma incorrecta de únicos diarios. Los rankings muestran hasta 50 resultados. Fechas en hora de Colombia; comparación con el período anterior de igual duración.
+- Detalles/identificadores del servidor: 90 días; agregados sin identificadores: 730 días. Limpieza por lotes al iniciar y cada seis horas mientras Node está activo; reintenta cada minuto ante errores o acumulación. No toca datos deportivos. Las copias de seguridad del proveedor tienen una conservación independiente.
+- Opcional: definir `ANALYTICS_SECRET` como un secreto aleatorio estable en las variables de la API (nunca `VITE_`). Si no existe se utiliza `JWT_SECRET`; rotar el secreto cambia los hashes y puede aumentar visitantes/sesiones estimados durante el período de transición. No publicar secretos en el repositorio.
+- Pruebas aisladas: `node --test scores-api/test/analytics*.test.js` y `scripts/qa-analytics.cjs` con el frontend local en 4173. No iniciar una API conectada a producción para probarlo.
 
 ## Activar push en Hostinger
 

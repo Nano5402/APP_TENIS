@@ -157,7 +157,7 @@ export default function JudgeControl() {
           </div>
         </div>
 
-        <Scoreboard marcador={marcador} names={names} matchId={id} onSaved={load} />
+        <Scoreboard marcador={marcador} names={names} matchId={id} version={partido.control_version} onSaved={load} />
 
         {!isFinished && (
           <div className='px-4 pb-4 flex flex-wrap items-center gap-2'>
@@ -288,10 +288,12 @@ export default function JudgeControl() {
   )
 }
 
-function Scoreboard({ marcador, names, matchId, onSaved }) {
+function Scoreboard({ marcador, names, matchId, version, onSaved }) {
   const visibleSets = Math.max(marcador.sets?.length || 1, 3)
   const [editing, setEditing] = useState(null)
   const [editValue, setEditValue] = useState('')
+  const [editVersion, setEditVersion] = useState(null)
+  const [editError, setEditError] = useState('')
   const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {
@@ -299,10 +301,11 @@ function Scoreboard({ marcador, names, matchId, onSaved }) {
     setSaving(true)
     try {
       const sideKey = editing === 'jugador1' ? 'nombre_override_j1' : 'nombre_override_j2'
-      await matchService.updateParticipants(matchId, { [sideKey]: editValue || null })
+      await matchService.updateParticipants(matchId, { [sideKey]: editValue || null, expected_control_version: editVersion })
       setEditing(null)
       onSaved?.()
-    } catch {
+    } catch (error) {
+      setEditError(error.message || 'No se pudo guardar. Actualiza y vuelve a abrir la edición.')
     } finally {
       setSaving(false)
     }
@@ -310,6 +313,7 @@ function Scoreboard({ marcador, names, matchId, onSaved }) {
 
   return (
     <div className='p-3 sm:p-5 overflow-x-auto'>
+      {editError && <p role='alert' className='text-sm text-red-600 mb-2'>{editError}</p>}
       <div className='min-w-[470px]'>
         <div className='grid gap-2 text-center text-[10px] uppercase font-bold mb-2' style={{ gridTemplateColumns: `minmax(190px,1fr) repeat(${visibleSets},48px) 68px` }}>
           <span className='text-left' style={{ color: 'var(--text-muted)' }}>Jugador</span>
@@ -337,7 +341,7 @@ function Scoreboard({ marcador, names, matchId, onSaved }) {
               ) : (
                 <>
                   <strong className='truncate' style={{ color: 'var(--text-primary)' }}>{names[side]}</strong>
-                  <button onClick={() => { setEditing(side); setEditValue('') }} className='p-1 opacity-50 hover:opacity-100'><Pencil className='w-3 h-3' style={{ color: 'var(--text-muted)' }} /></button>
+                  <button onClick={() => { setEditing(side); setEditVersion(version); setEditError(''); setEditValue('') }} className='p-1 opacity-50 hover:opacity-100'><Pencil className='w-3 h-3' style={{ color: 'var(--text-muted)' }} /></button>
                 </>
               )}
               {marcador.winner === side && <Trophy className='w-4 h-4 shrink-0' style={{ color: 'var(--club-clay)' }} />}

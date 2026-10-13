@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { tournamentService } from '../../services/tournamentService'
 import { formatDate } from '../../utils/formatDate'
 export default function TournamentDirectory() {
+  const [archive, setArchive] = useState('activos')
   const [items, setItems] = useState([]),
     [error, setError] = useState(''),
     [loading, setLoading] = useState(true),
@@ -11,7 +12,7 @@ export default function TournamentDirectory() {
     let active = true
     setLoading(true)
     tournamentService
-      .getAll({ deporte: 'tenis' })
+      .getAll({ deporte: 'tenis', archivo: archive })
       .then((r) => {
         if (active) {
           setItems(r.data)
@@ -27,7 +28,7 @@ export default function TournamentDirectory() {
     return () => {
       active = false
     }
-  }, [retry])
+  }, [retry, archive])
   if (error)
     return (
       <div role='alert'>
@@ -39,11 +40,14 @@ export default function TournamentDirectory() {
     )
   if (loading) return <p role='status'>Cargando torneos…</p>
   return (
+    <div className='space-y-4'>
+    <label className='block text-sm font-semibold'>Torneos<select className='form-input mt-1 w-full sm:max-w-xs' value={archive} onChange={e=>setArchive(e.target.value)}><option value='activos'>Sin archivar</option><option value='archivados'>Historial archivado</option></select></label>
     <div className='grid sm:grid-cols-2 gap-4'>
-      {!items.length && <p>Aún no hay torneos publicados.</p>}
+      {!items.length && <p>No hay torneos en esta selección.</p>}
       {items.map((t) => (
         <Link key={t.id} to={`/torneo/${t.id}`} className='card p-5 block space-y-3'>
           <span className='badge-brand'>
+            {t.archivado ? 'Archivado · ' : ''}
             {t.modalidad === 'dobles' ? 'Dobles' : 'Individual'} · {t.estado.replace('_', ' ')}
           </span>
           <h2 className='font-bold text-lg'>{t.nombre}</h2>
@@ -57,6 +61,7 @@ export default function TournamentDirectory() {
           <span className='text-sm font-semibold text-[var(--color-brand)]'>Ver torneo →</span>
         </Link>
       ))}
+    </div>
     </div>
   )
 }

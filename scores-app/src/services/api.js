@@ -52,6 +52,7 @@ api.interceptors.response.use(
     }
     if (
       error.config?.method?.toLowerCase() === 'delete' &&
+      !error.config?.suppressDeleteAlert &&
       Number(error.response?.status) >= 400
     ) {
       void showAlert({

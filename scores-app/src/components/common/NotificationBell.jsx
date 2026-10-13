@@ -5,6 +5,7 @@ import useAuthStore from '../../store/useAuthStore'
 import api from '../../services/api'
 import ActionDialog from './ActionDialog'
 import PushSettings from './PushSettings'
+import MatchNoticePreference from './MatchNoticePreference'
 
 export default function NotificationBell() {
   const userId = useAuthStore((s) => s.user?.id)
@@ -86,8 +87,9 @@ export default function NotificationBell() {
       {open && (
         <ActionDialog title='Notificaciones' onClose={() => setOpen(false)} busy={busy}>
           {official && <PushSettings />}
+          <MatchNoticePreference key={userId} />
           <p className='text-sm text-[var(--text-secondary)]'>
-            Avisos de soporte · últimas 50 notificaciones.
+            Avisos personales y de soporte · últimas 50 notificaciones.
           </p>
           {error && (
             <p role='alert' className='text-red-600'>

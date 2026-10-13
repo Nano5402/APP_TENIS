@@ -9,12 +9,14 @@ const fail = (status, message) => {
 const parse = (value) => (typeof value === 'string' ? JSON.parse(value) : value)
 
 async function change(id, user, body, action, work) {
-  if (!['admin', 'juez_director'].includes(user?.rol))
+  if (!['admin', 'juez_director'].includes(user?.rol) && !(action === 'reasignar_cancha' && user?.rol === 'juez'))
     fail(403, 'Esta acción requiere un administrador o juez director')
   if (!Number.isSafeInteger(body?.expected_control_version) || body.expected_control_version < 0)
     fail(400, 'Actualiza el partido antes de realizar esta acción')
   const connection = await db.getConnection()
+  let scheduleLocked = false
   try {
+    await require('./scheduling.service').lock(connection); scheduleLocked = true
     await connection.beginTransaction()
     const [[target]] = await connection.query('SELECT torneo_id FROM partidos WHERE id=?', [id])
     if (target?.torneo_id)
@@ -22,12 +24,15 @@ async function change(id, user, body, action, work) {
     const [rows] = await connection.query('SELECT * FROM partidos WHERE id = ? FOR UPDATE', [id])
     if (!rows.length) fail(404, 'Partido no encontrado')
     const match = rows[0]
+    if (user.rol === 'juez' && Number(match.juez_id) !== Number(user.id))
+      fail(403, 'Solo puedes confirmar la cancha de tus partidos asignados')
     if (Number(match.control_version || 0) !== body.expected_control_version)
       fail(
         409,
         'Otro oficial modificó este partido. Actualiza la información y vuelve a intentarlo.'
       )
     const details = await work(connection, match)
+    await require('./schedule-notifications').afterChange(connection, match)
     await connection.query(
       'UPDATE partidos SET control_version = control_version + 1 WHERE id = ?',
       [id]
@@ -41,6 +46,7 @@ async function change(id, user, body, action, work) {
     await connection.rollback()
     throw error
   } finally {
+    if (scheduleLocked) await require('./scheduling.service').unlock(connection)
     connection.release()
   }
   return require('./matches.service').getById(id)
@@ -53,6 +59,7 @@ exports.reassignCourt = (id, body, user) =>
     const courtId = (body.cancha_id === null || body.cancha_id === '' || body.cancha_id === undefined)
       ? null
       : Number(body.cancha_id)
+    if (user.rol === 'juez' && courtId === null) fail(400, 'Selecciona la cancha donde se jugará el partido')
     if (courtId !== null && (!Number.isSafeInteger(courtId) || courtId <= 0))
       fail(400, 'Selecciona una cancha válida o Sin asignar')
     if (courtId !== null) {
@@ -70,6 +77,7 @@ exports.reassignCourt = (id, body, user) =>
         [courtId, id, match.estado, match.fecha_inicio, match.hora_inicio])
       if (occupied.length) fail(409, 'La cancha ya tiene otro partido en vivo o en el mismo horario')
     }
+    await require('./scheduling.service').assertAvailable({ ...match, cancha_id: courtId }, conn)
     await conn.query('UPDATE partidos SET cancha_id = ? WHERE id = ?', [courtId, id])
     return { anterior: match.cancha_id, nuevo: courtId }
   })
@@ -88,6 +96,7 @@ exports.reassignJudge = (id, body, user) =>
       )
       if (!judges.length) fail(400, 'El juez seleccionado no está disponible')
     }
+    await require('./scheduling.service').assertAvailable({ ...match, juez_id: judgeId }, conn)
     await conn.query('UPDATE partidos SET juez_id = ? WHERE id = ?', [judgeId, id])
     return { anterior: match.juez_id, nuevo: judgeId }
   })
@@ -128,6 +137,8 @@ exports.reactivateMatch = (id, body, user) =>
       [id]
     )
     const started = Boolean(live[0]?.iniciado_at)
+    await require('../torneos/retiros.service').assertAvailable(match, conn)
+    await require('./scheduling.service').assertAvailable({ ...match, estado: started ? 'en_vivo' : 'programado' }, conn)
     await conn.query(
       `UPDATE estado_en_vivo_partido SET finalizado_at = NULL,
     pausado_at = IF(iniciado_at IS NULL, NULL, COALESCE(pausado_at, NOW())) WHERE partido_id = ?`,
@@ -212,6 +223,7 @@ exports.correctScore = (id, body, user) =>
         ]
       )
     }
+    await require('./scheduling.service').assertAvailable({ ...match, estado: body.estado }, conn)
     await conn.query('UPDATE partidos SET estado = ?, ganador = ? WHERE id = ?', [
       body.estado,
       state.winner,
@@ -326,6 +338,7 @@ exports.substitute = (id, body, user) =>
       )
         fail(400, 'Un jugador no puede participar en ambos lados del partido')
     }
+    await require('./scheduling.service').assertAvailable({ ...match, [field]: newId }, conn)
     await conn.query(
       `UPDATE partidos SET ${field} = ?, nombre_override_j${side} = NULL, nombre_override = NULL, origen_partido${side}_id = NULL WHERE id = ?`,
       [newId, id]

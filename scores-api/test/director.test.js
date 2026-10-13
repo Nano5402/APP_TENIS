@@ -31,6 +31,11 @@ function load(options = {}) {
     release() {},
     async query(sql, params) {
       calls.push({ sql, params })
+      if (sql.includes('GET_LOCK(')) return [[{ acquired: 1 }]]
+      if (sql.includes('RELEASE_LOCK(')) return [[{ released: 1 }]]
+      if (sql.includes('DATE_SUB(?, INTERVAL 1 DAY)')) return [[]]
+      if (sql === 'SELECT id,jugador1_id,jugador2_id FROM equipos_padel WHERE id IN (?)') return [[]]
+      if (sql.includes('FROM torneo_retiros')) return [[]]
       if (sql.startsWith('SELECT torneo_id FROM partidos'))
         return [[{ torneo_id: match.torneo_id }]]
       if (sql.startsWith('SELECT id FROM torneos')) return [[{ id: match.torneo_id }]]
@@ -83,6 +88,17 @@ function load(options = {}) {
   }
 }
 const writes = (ctx) => ctx.calls.filter(({ sql }) => /^(INSERT|UPDATE|DELETE)/.test(sql))
+
+test('juez confirma su cancha; no modifica canchas ajenas ni permisos de dirección', async () => {
+  const body = { cancha_id: 4, expected_control_version: 0 }
+  const own = load()
+  await own.service.reassignCourt(10, body, { id: 3, rol: 'juez' })
+  assert.equal(own.committed, true)
+  const other = load()
+  await assert.rejects(other.service.reassignCourt(10, body, { id: 4, rol: 'juez' }), e => e.status === 403)
+  assert.equal(writes(other).length, 0)
+  await assert.rejects(load().service.reassignCourt(10, body, { id: 3, rol: 'miembro' }), e => e.status === 403)
+})
 test('cancha exige deporte compatible, disponibilidad y versión actual', async () => {
   const body = { cancha_id: 4, expected_control_version: 0 }
   const wrongSport = load({ courts: [{ id: 4, deporte: 'padel' }] })

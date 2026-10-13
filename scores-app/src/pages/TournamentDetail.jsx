@@ -9,6 +9,7 @@ import TournamentTeamsModal from '../components/tournament/TournamentTeamsModal'
 import TournamentRoster from '../components/tournament/TournamentRoster'
 import TournamentStandings from '../components/tournament/TournamentStandings'
 import TournamentMatches from '../components/tournament/TournamentMatches'
+import TournamentBracket from '../components/tournament/TournamentBracket'
 import TournamentRetirements from '../components/tournament/TournamentRetirements'
 import { confirm } from '../utils/confirm'
 export default function TournamentDetail() {
@@ -23,7 +24,7 @@ export default function TournamentDetail() {
     [tab, setTab] = useState(() => {
       const initial = searchParams.get('tab') || 'matches'
       if (initial === 'participation' && !admin) return 'matches'
-      return ['matches', 'teams', 'standings', 'participation'].includes(initial) ? initial : 'matches'
+      return ['matches', 'teams', 'standings', 'participation', 'bracket'].includes(initial) ? initial : 'matches'
     }),
     [data, setData] = useState(null),
     [error, setError] = useState(''),
@@ -35,7 +36,7 @@ export default function TournamentDetail() {
 
   useEffect(() => {
     const requested = searchParams.get('tab') || 'matches'
-    const tParam = ['matches', 'teams', 'standings', 'participation'].includes(requested) ? requested : 'matches'
+    const tParam = ['matches', 'teams', 'standings', 'participation', 'bracket'].includes(requested) ? requested : 'matches'
     if (tParam && tParam !== tab) {
       if (tParam === 'participation' && !admin) {
         setTab('matches')
@@ -154,16 +155,14 @@ export default function TournamentDetail() {
             <p className='text-sm'>
               {t.estado.replace('_', ' ')} · {t.sistema.replaceAll('_', ' ')}
             </p>
-            {admin && <p className='text-xs'>
-              La organización programa los partidos. Inscribir parejas no genera cruces
-              automáticamente.
-            </p>}
+            {t.archivado && <p className='text-sm font-semibold'>Torneo archivado · historial disponible</p>}
           </header>
           <div className='flex flex-wrap gap-2' aria-label='Secciones del torneo'>
             {[
               ['matches', 'Partidos'],
               ...(t.modalidad === 'dobles' ? [['teams', 'Parejas inscritas']] : []),
               ['standings', 'Posiciones'],
+              ...(['grupos_eliminacion', 'eliminacion_directa'].includes(t.sistema) ? [['bracket', 'Eliminatorias']] : []),
               ...(admin ? [['participation', 'Participación']] : []),
             ].map(([v, l]) => (
               <button
@@ -245,6 +244,7 @@ export default function TournamentDetail() {
         </div>
       )}
       {data && tab === 'standings' && <TournamentStandings data={data} retirements={retirements} />}
+      {!busy && !error && Array.isArray(data) && tab === 'bracket' && <TournamentBracket key={id} matches={data} system={t?.sistema} management={standingsManagement} />}
       {admin && tab === 'participation' && <TournamentRetirements tournamentId={id} onChange={refresh} />}
       {adding && (
         <TournamentTeamsModal

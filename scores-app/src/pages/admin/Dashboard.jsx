@@ -7,13 +7,18 @@ import { tournamentService } from '../../services/tournamentService'
 import { matchService } from '../../services/matchService'
 import { formatRelative } from '../../utils/formatDate'
 import { getParticipantName } from '../../utils/matchParticipants'
+import AdminAttention from '../../components/tournament/AdminAttention'
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ jugadores: 0, equipos: 0, torneos: 0, enVivo: 0 })
   const [recent, setRecent] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [revision, setRevision] = useState(0)
 
   useEffect(() => {
+    let active = true
+    setLoading(true); setError('')
     Promise.all([
       playerService.getAll(),
       teamService.getAll(),
@@ -22,6 +27,7 @@ export default function Dashboard() {
       matchService.getFinished(),
     ])
       .then(([jugadores, equipos, torneos, live, finished]) => {
+        if (!active) return
         setStats({
           jugadores: jugadores.data?.length || 0,
           equipos: equipos.data?.length || 0,
@@ -30,9 +36,10 @@ export default function Dashboard() {
         })
         setRecent(finished.data?.slice(0, 5) || [])
       })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
+      .catch(() => { if (active) setError('No se pudo consultar el resumen. Los valores no están disponibles.') })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [revision])
 
   const STAT_CARDS = [
     {
@@ -79,6 +86,8 @@ export default function Dashboard() {
         </p>
       </div>
 
+      <AdminAttention />
+      {error && <div role='alert' className='card p-4 text-sm'>{error} <button className='underline font-semibold' onClick={() => setRevision(n => n + 1)}>Reintentar resumen</button></div>}
       {/* Stats */}
       <div className='grid grid-cols-2 lg:grid-cols-4 gap-4'>
         {STAT_CARDS.map((card) => (
@@ -99,7 +108,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <p className='text-3xl font-black' style={{ color: 'var(--text-primary)' }}>
-                {loading ? '—' : card.value}
+                {loading || error ? '—' : card.value}
               </p>
             </div>
           </Link>
@@ -155,7 +164,7 @@ export default function Dashboard() {
             {recent.map((m, i) => {
               const p1 = getParticipantName(m, 1)
               const p2 = getParticipantName(m, 2)
-              const ganadorNombre = m.ganador === 'jugador1' ? p1 : p2
+              const ganadorNombre = m.ganador === 'jugador1' ? p1 : m.ganador === 'jugador2' ? p2 : 'Sin ganador registrado'
 
               return (
                 <div

@@ -25,6 +25,17 @@ function validate(input) {
   if (!uuid.test(input.version || '') || (input.expected && !uuid.test(input.expected))) throw fail(400, 'Identificador de fotografía inválido')
   if (!['inicio', 'final'].includes(input.momento)) throw fail(400, 'Selecciona si la foto es del inicio o del final')
   if (input.consentimiento !== 'true') throw fail(400, 'Confirma la autorización para publicar la fotografía')
+  framing(input.encuadre)
+}
+
+function framing(value) {
+  if (value == null || value === '') return { zoom: 1, x: 50, y: 50 }
+  let frame
+  try { frame = typeof value === 'string' ? JSON.parse(value) : value } catch { throw fail(400, 'Encuadre inválido') }
+  if (!frame || Array.isArray(frame) || typeof frame !== 'object' ||
+    !['zoom', 'x', 'y'].every(key => typeof frame[key] === 'number' && Number.isFinite(frame[key])) ||
+    frame.zoom < 1 || frame.zoom > 2.5 || frame.x < 0 || frame.x > 100 || frame.y < 0 || frame.y > 100) throw fail(400, 'Encuadre inválido')
+  return { zoom: frame.zoom, x: frame.x, y: frame.y }
 }
 
 async function normalize(buffer) {
@@ -33,7 +44,7 @@ async function normalize(buffer) {
     const metadata = await image.metadata()
     if (!['jpeg', 'png', 'webp'].includes(metadata.format) || (metadata.pages || 1) > 1) throw new Error('format')
     // Re-encoding without withMetadata strips EXIF, including GPS.
-    const full = await image.rotate().resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true }).webp({ quality: 78 }).toBuffer()
+    const full = await image.rotate().resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true }).webp({ quality: 88 }).toBuffer()
     const thumb = await sharp(full).resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true }).webp({ quality: 70 }).toBuffer()
     return { full, thumb }
   } catch { throw fail(400, 'Imagen inválida. Usa una foto JPEG, PNG o WebP de hasta 24 megapíxeles.') }
@@ -48,11 +59,11 @@ function createPhotoService(db, directory = process.env.MATCH_PHOTOS_DIR) {
     if (!uuid.test(version)) throw fail(400, 'Identificador inválido')
     return path.join(root(), `${version}${thumb ? '-thumb' : ''}.webp`)
   }
-  const metadata = row => row ? { version: row.version, momento: row.momento, updated_at: row.updated_at } : null
+  const metadata = row => row ? { version: row.version, momento: row.momento, updated_at: row.updated_at, encuadre: row.encuadre == null ? null : framing(row.encuadre) } : null
   async function get(id) {
     const [matches] = await db.query('SELECT id FROM partidos WHERE id = ?', [id])
     if (!matches.length) throw fail(404, 'Partido no encontrado')
-    const [rows] = await db.query('SELECT version, momento, updated_at FROM fotos_partido WHERE partido_id = ?', [id])
+    const [rows] = await db.query('SELECT version, momento, updated_at, encuadre FROM fotos_partido WHERE partido_id = ?', [id])
     return metadata(rows[0])
   }
   async function check(id, user) {
@@ -91,7 +102,7 @@ function createPhotoService(db, directory = process.env.MATCH_PHOTOS_DIR) {
       const [rows] = await conn.query('SELECT * FROM fotos_partido WHERE partido_id = ? FOR UPDATE', [id])
       previous = rows[0]
       if (previous?.version === input.version) {
-        if (Number(previous.created_by) !== Number(user.id) || previous.momento !== input.momento) throw fail(409, 'La fotografía fue modificada por otro usuario')
+        if (Number(previous.created_by) !== Number(user.id) || previous.momento !== input.momento || JSON.stringify(framing(previous.encuadre)) !== JSON.stringify(framing(input.encuadre))) throw fail(409, 'La fotografía fue modificada por otro usuario')
         await conn.commit(); committed = true
         return metadata(previous)
       }
@@ -100,10 +111,10 @@ function createPhotoService(db, directory = process.env.MATCH_PHOTOS_DIR) {
       await fs.writeFile(file(input.version), images.full, { flag: 'wx', mode: 0o600 })
       written = true
       await fs.writeFile(file(input.version, true), images.thumb, { flag: 'wx', mode: 0o600 })
-      await conn.query(`INSERT INTO fotos_partido (partido_id, version, momento, created_by, bytes, updated_at)
-        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON DUPLICATE KEY UPDATE version = VALUES(version), momento = VALUES(momento), created_by = VALUES(created_by), bytes = VALUES(bytes), updated_at = CURRENT_TIMESTAMP`,
-      [id, input.version, input.momento, user.id, images.full.length])
+      await conn.query(`INSERT INTO fotos_partido (partido_id, version, momento, created_by, bytes, encuadre, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON DUPLICATE KEY UPDATE version = VALUES(version), momento = VALUES(momento), created_by = VALUES(created_by), bytes = VALUES(bytes), encuadre = VALUES(encuadre), updated_at = CURRENT_TIMESTAMP`,
+      [id, input.version, input.momento, user.id, images.full.length, JSON.stringify(framing(input.encuadre))])
       commitAttempted = true
       await conn.commit(); committed = true
     } catch (error) {
@@ -123,7 +134,36 @@ function createPhotoService(db, directory = process.env.MATCH_PHOTOS_DIR) {
     }
     return get(id)
   }
-  return { get, check, save, file, status }
+  async function remove(id, user, expected) {
+    if (user?.rol !== 'admin') throw fail(403, 'Solo los administradores pueden eliminar fotos')
+    if (typeof expected !== 'string' || !uuid.test(expected)) throw fail(400, 'Identificador de fotografía inválido')
+    root()
+    const conn = await db.getConnection()
+    try {
+      await conn.beginTransaction()
+      const [matches] = await conn.query('SELECT id, juez_id FROM partidos WHERE id = ? FOR UPDATE', [id])
+      if (!matches.length) throw fail(404, 'Partido no encontrado')
+      const [rows] = await conn.query('SELECT * FROM fotos_partido WHERE partido_id = ? FOR UPDATE', [id])
+      if (rows[0] && rows[0].version !== expected) throw fail(409, 'La foto cambió. Revisa la foto actual antes de eliminarla.')
+      if (rows[0]) {
+        await conn.query('DELETE FROM fotos_partido WHERE partido_id = ? AND version = ?', [id, expected])
+        await conn.query('INSERT INTO auditoria_control_partido (partido_id, created_by, accion, detalle) VALUES (?, ?, ?, ?)',
+          [id, user.id, 'eliminar_foto', JSON.stringify({ version: expected, momento: rows[0].momento })])
+      }
+      await conn.commit()
+    } catch (error) {
+      await conn.rollback().catch(() => {})
+      throw error
+    } finally { conn.release() }
+    // Never remove files before a confirmed commit. Missing metadata already blocks public access.
+    for (const thumbnail of [false, true]) {
+      await fs.unlink(file(expected, thumbnail)).catch(error => {
+        if (error.code !== 'ENOENT') console.warn('Photo cleanup failed:', error.code)
+      })
+    }
+    return null
+  }
+  return { get, check, save, file, status, remove }
 }
 
-module.exports = { createPhotoService, authorize, validate, normalize, publicError }
+module.exports = { createPhotoService, authorize, validate, normalize, publicError, framing }

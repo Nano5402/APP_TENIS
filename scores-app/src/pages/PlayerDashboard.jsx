@@ -57,6 +57,7 @@ export default function PlayerDashboard() {
   const list = (tab === 'historial' ? history : upcoming).filter(m => !tournament || String(m.torneo?.id) === tournament)
 
   return <div className='space-y-6 animate-fade-up'>
+    {['admin', 'juez', 'juez_director'].includes(user?.rol) && <nav aria-label='Cambiar actividad' className='flex flex-wrap gap-2'><span className='btn-primary px-4 py-2 text-sm'>Mi actividad · jugador</span><Link className='btn-secondary px-4 py-2 text-sm' to='/juez'>Mesa de juez</Link>{user?.rol === 'juez_director' && <Link className='btn-secondary px-4 py-2 text-sm' to='/director'>Dirección</Link>}</nav>}
     <section className='card p-5 sm:p-7 flex flex-wrap items-center gap-4'>
       <Avatar src={data?.jugador?.foto || user?.avatar} name={`${user?.nombre || ''} ${user?.apellido || ''}`} size='lg' />
       <div className='flex-1 min-w-[160px]'>

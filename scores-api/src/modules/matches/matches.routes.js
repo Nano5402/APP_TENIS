@@ -8,7 +8,24 @@ router.get('/stream', controller.stream)
 router.get('/live-version', controller.liveVersion)
 router.get('/mios', requireAuth, controller.getMyMatches)
 router.get('/gestion/mis-partidos', requireAuth, requireOfficial, controller.getManaged)
+router.get('/gestion/pendientes', requireAuth, requireAdmin, async (_req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store')
+  try { res.json({ ok: true, data: await require('../torneos/attention.service').get() }) }
+  catch { res.status(500).json({ ok: false, message: 'No se pudieron consultar los pendientes. Reintenta; no se han modificado datos.' }) }
+})
+router.post('/gestion/programacion', requireAuth, requireOfficial, async (req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store')
+  try { res.json({ ok: true, data: await require('./matches.service').checkSchedule(req.body, req.user) }) }
+  catch (e) { res.status(e.status || 500).json({ ok: false, message: e.status ? e.message : 'No se pudo revisar la programación. Reintenta.' }) }
+})
 router.use('/:id/foto', require('./match-photo.routes'))
+// Read-only public results remain available; scoring your own match is not allowed.
+router.use('/:matchId/:operation', (req, res, next) => {
+  const guarded = ['control', 'iniciar', 'pausa', 'saque', 'orden-saque-dobles', 'eventos', 'deshacer', 'marcador', 'correccion', 'walkover', 'cancelar-partido']
+  if (!guarded.includes(req.params.operation)) return next()
+  const authorize = req.params.operation === 'correccion' ? requireDirector : req.params.operation === 'marcador' ? requireScorer : requireOfficial
+  requireAuth(req, res, () => authorize(req, res, () => require('./neutral-official').guard(req, res, next)))
+})
 // GET  /api/partidos/:id
 router.get('/:id/auditoria', requireAuth, requireDirector, async (req, res) => {
   const { success, error } = require('../../utils/response')
@@ -31,7 +48,7 @@ router.put('/:id', requireAuth, requireScorer, controller.update)
 // PUT  /api/partidos/:id/participantes  — renombrar o reasignar participantes
 router.put('/:id/participantes', requireAuth, requireOfficial, controller.updateParticipants)
 // PUT  /api/partidos/:id/reasignar-cancha — reasignar cancha
-router.put('/:id/reasignar-cancha', requireAuth, requireDirector, controller.reassignCourt)
+router.put('/:id/reasignar-cancha', requireAuth, requireOfficial, controller.reassignCourt)
 // PUT  /api/partidos/:id/reasignar-juez — reasignar juez
 router.put('/:id/reasignar-juez', requireAuth, requireDirector, controller.reassignJudge)
 // PUT  /api/partidos/:id/walkover — declarar walkover (W)

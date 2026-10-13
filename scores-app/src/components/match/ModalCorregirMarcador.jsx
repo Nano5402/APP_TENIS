@@ -385,7 +385,7 @@ export default function ModalCorregirMarcador({ isOpen, onClose, match, onSucces
             </label>
             <label className='flex items-start gap-2 text-xs'>
               <input type='checkbox' checked={confirmReset} onChange={(e) => setConfirmReset(e.target.checked)} disabled={saving} />
-              Confirmo que el game o tiebreak en curso se reiniciará en 0-0. Las estadísticas conservarán únicamente los puntos registrados; esta corrección no inventa puntos.
+              Confirmo que el game o tiebreak en curso se reiniciará en 0-0. La corrección no añade puntos a las estadísticas.
             </label>
             <p className='text-xs text-[var(--text-muted)]'>Configura solo los sets jugados. En un match tiebreak finalizado, escribe sus puntos (por ejemplo 10-8) en las casillas de games.</p>
           </div>

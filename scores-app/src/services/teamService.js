@@ -5,5 +5,5 @@ export const teamService = {
   getById: (id) => api.get(`/equipos/${id}`),
   create: (data) => api.post('/equipos', data),
   update: (id, data) => api.put(`/equipos/${id}`, data),
-  remove: (id) => api.delete(`/equipos/${id}`),
+  remove: (id, options) => api.delete(`/equipos/${id}`, options),
 }

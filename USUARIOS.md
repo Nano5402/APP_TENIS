@@ -94,3 +94,13 @@ ALTER habitual de las migraciones de esta aplicación.
   4175; recibe como argumento la ruta de Playwright si no está instalado localmente.
   Comprueba móvil/escritorio, edición, contraseña, estado, eliminación bloqueada
   y conservación de sesión durante fallos de health. No usa la base de producción.
+
+## Actividad de jugador y oficial
+
+Una cuenta conserva su rol y puede vincular una ficha de jugador, también si es juez, director o administrador. La vinculación puede hacerse al crearla o desde «Editar datos del usuario → Actividad como jugador». Solo administración puede vincular; no se sustituye una ficha ya vinculada ni se toma una ficha de otra cuenta.
+
+«Mi actividad» (`/mi-actividad`) muestra únicamente los partidos de la ficha vinculada a la sesión; «Mesa de juez» conserva sus permisos anteriores. Sin ficha, se indica que debe vincularla administración. La consulta pública del partido y del torneo está disponible también para oficiales. No se introduce otro rol ni se duplican cuentas.
+
+La API rechaza el acceso a control y las operaciones de marcación de un encuentro si la cuenta pertenece a uno de sus participantes, incluidos integrantes de parejas. Otro oficial debe marcarlo. El administrador conserva las herramientas de programación; la consulta del resultado sigue disponible.
+
+Antes de iniciar se confirma una revisión breve de participantes, cancha, formato y primer saque. Un resultado con acciones pendientes o pendiente de sincronizar se identifica como cierre no confirmado. No se modifica el motor ni la cola de puntos.

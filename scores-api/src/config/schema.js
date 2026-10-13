@@ -96,6 +96,14 @@ exports.ensureSchema = async () => {
     detalle JSON NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_eliminacion (entidad,registro_id)
   ) ENGINE=InnoDB`)
+  // Independent audit: retain history even after the entity or account is deleted.
+  await db.query(`CREATE TABLE IF NOT EXISTS auditoria_ediciones (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    entidad VARCHAR(40) NOT NULL, registro_id BIGINT NOT NULL, actor_id BIGINT NULL,
+    accion VARCHAR(80) NOT NULL, detalle JSON NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_edicion_registro (entidad,registro_id), KEY idx_edicion_fecha (created_at,id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`)
   // Independent tournament membership: never infer or populate it from old matches.
   await db.query(`CREATE TABLE IF NOT EXISTS torneo_grupos (
     torneo_id INT NOT NULL, categoria_id INT NOT NULL, nombre VARCHAR(20) NOT NULL,
@@ -278,6 +286,15 @@ exports.ensureSchema = async () => {
     )
   }
   const tournamentSystemType = await getColumnType('torneos', 'sistema')
+  if (!(await columnExists('torneos', 'archivado_at'))) {
+    await db.query('ALTER TABLE torneos ADD COLUMN archivado_at DATETIME NULL')
+  }
+  await db.query(`CREATE TABLE IF NOT EXISTS auditoria_archivo_torneos (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, torneo_id INT NOT NULL,
+    actor_id INT NOT NULL, archivado BOOLEAN NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_archivo_torneo (torneo_id,id)
+  ) ENGINE=InnoDB`)
   if (tournamentSystemType && !tournamentSystemType.includes("'por_definir'")) {
     await db.query(
       "ALTER TABLE torneos MODIFY sistema ENUM('por_definir','eliminacion_directa','todos_contra_todos','grupos_eliminacion') NOT NULL DEFAULT 'por_definir'"
@@ -586,9 +603,14 @@ exports.ensureSchema = async () => {
     CONSTRAINT fk_foto_partido FOREIGN KEY (partido_id) REFERENCES partidos(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`)
 
+  if (!(await columnExists('fotos_partido', 'encuadre'))) {
+    await db.query('ALTER TABLE fotos_partido ADD COLUMN encuadre JSON NULL')
+  }
+
   if (!(await columnExists('anuncios', 'imagen_url'))) {
     await db.query('ALTER TABLE anuncios ADD COLUMN imagen_url VARCHAR(255) NULL')
   }
   await require('../modules/support/schema').ensureSupportSchema(db)
+  await require('../modules/caddies/schema').ensureCaddieSchema(db)
   console.log('✅  Esquema de partidos y jueces actualizado')
 }

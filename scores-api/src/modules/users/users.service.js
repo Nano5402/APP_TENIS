@@ -128,7 +128,6 @@ const createAccount = async ({
 exports.create = async (data) => {
   const player = data.jugador
   if (!player || player.modo === 'ninguno') return exports.getById(await createAccount(data))
-  if ((data.rol || 'miembro') !== 'miembro') throw { status: 400, message: 'La vinculación de jugador en este formulario es para miembros' }
   if (!['existente', 'nuevo'].includes(player.modo)) throw { status: 400, message: 'Selecciona cómo vincular el jugador' }
   const aliasReady = await hasUsuarioColumn()
   const conn = await db.getConnection()
@@ -145,6 +144,26 @@ exports.create = async (data) => {
     throw err
   } finally { conn.release() }
   return exports.getById(userId)
+}
+
+exports.linkPlayer = async (id, playerId) => {
+  if (!Number.isSafeInteger(Number(id)) || Number(id) <= 0) throw { status: 400, message: 'Cuenta inválida' }
+  const conn = await db.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[account]] = await conn.query('SELECT id FROM users WHERE id=? FOR UPDATE', [id])
+    if (!account) throw { status: 404, message: 'Cuenta no encontrada' }
+    const [linked] = await conn.query('SELECT id FROM jugadores WHERE user_id=? FOR UPDATE', [id])
+    if (linked.length) {
+      if (linked.length !== 1 || Number(linked[0].id) !== Number(playerId)) throw { status: 409, message: 'Esta cuenta ya tiene una ficha vinculada. No se reemplaza su historial.' }
+    } else {
+      const link = await require('./userPlayer').preparePlayer(conn, { modo: 'existente', id: playerId }, account)
+      await link(id)
+    }
+    await conn.commit()
+  } catch (e) { await conn.rollback(); throw e }
+  finally { conn.release() }
+  return exports.getById(id)
 }
 
 exports.updateUsuario = async (id, usuario) => {

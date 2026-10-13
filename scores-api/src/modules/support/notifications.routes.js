@@ -6,6 +6,19 @@ router.use(requireAuth, (_req, res, next) => {
   res.set('Cache-Control', 'no-store')
   next()
 })
+router.get('/preferencias', async (req, res) => {
+  try {
+    const [[row]] = await db.query('SELECT cambios_partidos FROM preferencias_avisos WHERE user_id=?', [req.user.id])
+    return success(res, { cambios_partidos: row ? Boolean(row.cambios_partidos) : true })
+  } catch { return error(res, 'No se pudieron consultar las preferencias', 503) }
+})
+router.put('/preferencias', async (req, res) => {
+  if (typeof req.body?.cambios_partidos !== 'boolean') return error(res, 'Preferencia inválida', 400)
+  try {
+    await db.query('INSERT INTO preferencias_avisos (user_id,cambios_partidos) VALUES (?,?) ON DUPLICATE KEY UPDATE cambios_partidos=VALUES(cambios_partidos)', [req.user.id, req.body.cambios_partidos])
+    return success(res, { cambios_partidos: req.body.cambios_partidos })
+  } catch { return error(res, 'No se pudo guardar la preferencia', 503) }
+})
 router.get('/', async (req, res) => {
   try {
     const [rows] = await db.query(

@@ -35,7 +35,7 @@ const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .map((origin) => origin.trim())
   .filter(Boolean)
 
-app.use(helmet())
+app.use(helmet(require('./src/config/securityHeaders')))
 // SSE must flush each event immediately; never buffer the live stream.
 app.use(compression({ filter: (req, res) => req.originalUrl.split('?')[0] !== '/api/partidos/stream' && compression.filter(req, res) }))
 app.use(
@@ -69,7 +69,10 @@ app.use('/api/auth', authRoutes)
 app.use('/api/jugadores', jugadoresRoutes)
 app.use('/api/equipos', equiposRoutes)
 app.use('/api/torneos', torneosRoutes)
+app.use('/api/auditoria', require('./src/modules/audit/audit.routes'))
 app.use('/api/partidos', partidosRoutes)
+app.use('/api/caddies', require('./src/modules/caddies/caddies.routes'))
+app.use('/api/analytics', require('./src/modules/analytics/routes'))
 app.use('/api/anuncios', anunciosRoutes)
 app.use('/api/favoritos', favoritosRoutes)
 app.use('/api/categorias', categoriasRoutes)
@@ -154,6 +157,7 @@ app.ensureSchemaOnce = () => {
   if (!schemaPromise) {
     schemaPromise = readiness.start().then(() => {
       require('./src/modules/support/push.service').start()
+      require('./src/modules/analytics/runtime').start()
     }).catch((error) => {
       console.error('❌  No fue posible actualizar el esquema:', error.message)
       throw error

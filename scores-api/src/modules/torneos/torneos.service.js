@@ -1,4 +1,7 @@
-const db = require('../../config/db')
+const pool = require('../../config/db')
+const { AsyncLocalStorage } = require('node:async_hooks')
+const transaction = new AsyncLocalStorage()
+const db = { query: (...args) => (transaction.getStore() || pool).query(...args), getConnection: (...args) => pool.getConnection(...args) }
 const { rethrowDeleteConflict } = require('../../utils/deleteConflict')
 
 const MODALIDADES = ['individual', 'dobles']
@@ -8,7 +11,7 @@ const ESTADOS = ['proximo', 'en_curso', 'finalizado', 'cancelado']
 const SELECT = `
   SELECT
     t.id, t.nombre, t.deporte, t.categoria_id, t.modalidad, t.sistema,
-    t.fecha_inicio, t.fecha_fin, t.estado,
+    t.fecha_inicio, t.fecha_fin, t.estado, t.archivado_at,
     c.nombre AS categoria_nombre,
     (SELECT COUNT(*) FROM partidos p WHERE p.torneo_id = t.id) AS partidos_count,
     (SELECT COUNT(*) FROM inscripciones i WHERE i.torneo_id=t.id AND i.estado<>'eliminado') AS inscripciones_count
@@ -16,9 +19,11 @@ const SELECT = `
   LEFT JOIN categorias c ON c.id = t.categoria_id
 `
 
-exports.getAll = async ({ deporte, estado, modalidad }) => {
+exports.getAll = async ({ deporte, estado, modalidad, archivo = 'activos' }) => {
+  if (!['activos', 'archivados', 'todos'].includes(archivo)) throw { status: 400, message: 'Filtro de archivo inválido' }
   let query = `${SELECT} WHERE 1 = 1`
   const params = []
+  if (archivo !== 'todos') query += archivo === 'archivados' ? ' AND t.archivado_at IS NOT NULL' : ' AND t.archivado_at IS NULL'
 
   if (deporte) {
     query += ' AND t.deporte = ?'
@@ -135,6 +140,43 @@ exports.update = async (id, body) => {
     ]
   )
   return exports.getById(id)
+}
+
+// Commit the edit and its audit together; neither can succeed on its own.
+const updateTournament = exports.update
+exports.update = async (id, body, actor) => {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[before]] = await conn.query('SELECT * FROM torneos WHERE id=? FOR UPDATE', [id])
+    if (!before) throw { status: 404, message: 'Torneo no encontrado' }
+    const result = await transaction.run(conn, () => updateTournament(id, body))
+    const [[after]] = await conn.query('SELECT * FROM torneos WHERE id=?', [id])
+    await require('../audit/edit-audit').record(conn, 'torneo', id, actor, before, after)
+    await conn.commit()
+    return result
+  } catch (e) { await conn.rollback(); throw e }
+  finally { conn.release() }
+}
+
+exports.setArchived = async (id, archived, expected, actorId) => {
+  id = Number(id)
+  if (!Number.isSafeInteger(id) || id < 1 || typeof archived !== 'boolean' || typeof expected !== 'boolean') throw { status: 400, message: 'Datos de archivo inválidos. Actualiza el listado.' }
+  const conn = await db.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[row]] = await conn.query('SELECT id,archivado_at FROM torneos WHERE id=? FOR UPDATE', [id])
+    if (!row) throw { status: 404, message: 'Torneo no encontrado' }
+    const current = Boolean(row.archivado_at)
+    if (current !== archived) {
+      if (current !== expected) throw { status: 409, message: 'El archivo cambió desde otra sesión. Actualiza el listado.' }
+      await conn.query('UPDATE torneos SET archivado_at = IF(?,CURRENT_TIMESTAMP,NULL) WHERE id=?', [archived,id])
+      await conn.query('INSERT INTO auditoria_archivo_torneos (torneo_id,actor_id,archivado) VALUES (?,?,?)', [id,actorId,archived])
+    }
+    await conn.commit()
+    return { id, archivado: archived }
+  } catch (e) { await conn.rollback(); throw e }
+  finally { conn.release() }
 }
 
 exports.remove = async (id, actorId = null) => {
@@ -292,6 +334,7 @@ function formatTournament(row) {
     fecha_inicio: row.fecha_inicio || null,
     fecha_fin: row.fecha_fin || null,
     estado: row.estado,
+    archivado: Boolean(row.archivado_at),
     partidos_count: Number(row.partidos_count || 0),
     inscripciones_count: Number(row.inscripciones_count || 0),
   }

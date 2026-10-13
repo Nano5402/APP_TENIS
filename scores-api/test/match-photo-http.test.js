@@ -15,13 +15,15 @@ test('HTTP photo authorization, multipart, public image, replacement and forged 
   const originalDirectory = process.env.MATCH_PHOTOS_DIR, originalSecret = process.env.JWT_SECRET
   process.env.MATCH_PHOTOS_DIR = directory
   process.env.JWT_SECRET = 'local-test-only-photo-secret-not-production'
-  let row, writes = 0
+  let row, writes = 0, role = 'juez', audits = 0
   const db = {
     async query(sql, args) {
-      if (sql.includes('FROM users')) return [[{ rol: 'juez', activo: true }]]
+      if (sql.includes('FROM users')) return [[{ rol: role, activo: true }]]
+      if (sql.startsWith('DELETE FROM fotos_partido')) { row = null; return [{}] }
+      if (sql.startsWith('INSERT INTO auditoria_control_partido')) { audits++; return [{}] }
       if (sql.includes('FROM partidos')) return [Number(args[0]) === 30 ? [{ id: 30, juez_id: 12 }] : []]
       if (sql.includes('FROM fotos_partido')) return [row ? [{ ...row }] : []]
-      if (sql.startsWith('INSERT')) { writes++; row = { partido_id: args[0], version: args[1], momento: args[2], created_by: args[3], updated_at: 'now' }; return [{}] }
+      if (sql.startsWith('INSERT')) { writes++; row = { partido_id: args[0], version: args[1], momento: args[2], created_by: args[3], encuadre: args[5], updated_at: 'now' }; return [{}] }
       throw new Error(sql)
     },
     async getConnection() { return { query: db.query, beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release() {} } },
@@ -29,6 +31,7 @@ test('HTTP photo authorization, multipart, public image, replacement and forged 
   const dbPath = require.resolve('../src/config/db')
   require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: db }
   const app = express()
+  app.use(express.json())
   app.use('/api/partidos/:id/foto', require('../src/modules/matches/match-photo.routes'))
   const server = app.listen(0, '127.0.0.1')
   await once(server, 'listening')
@@ -56,7 +59,8 @@ test('HTTP photo authorization, multipart, public image, replacement and forged 
     assert.equal(writes, 1)
     assert.equal((await upload(12, randomUUID())).status, 409)
     const metadata = (await (await fetch(base)).json()).data
-    assert.deepEqual(Object.keys(metadata).sort(), ['momento', 'updated_at', 'version'])
+    assert.deepEqual(Object.keys(metadata).sort(), ['encuadre', 'momento', 'updated_at', 'version'])
+    assert.deepEqual(metadata.encuadre, { zoom: 1, x: 50, y: 50 })
     const image = await fetch(`${base}/imagen?v=${version}`)
     assert.equal(image.status, 200); assert.match(image.headers.get('content-type'), /image\/webp/)
     assert.equal((await sharp(Buffer.from(await image.arrayBuffer())).metadata()).format, 'webp')
@@ -67,6 +71,28 @@ test('HTTP photo authorization, multipart, public image, replacement and forged 
     assert.equal((await fetch(`${base}/imagen?v=${version}`)).status, 404)
     assert.equal((await fetch(`${base}/imagen?v=${replacement}&miniatura=1`)).status, 200)
     assert.equal(writes, 2)
+    const remove = (expected = replacement, authenticated = true) => fetch(base, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json', ...(authenticated ? { Authorization: `Bearer ${token(12)}` } : {}) },
+      body: JSON.stringify({ expected }),
+    })
+    assert.equal((await remove(replacement, false)).status, 401)
+    for (const denied of ['juez', 'juez_director', 'jugador']) {
+      role = denied
+      assert.equal((await remove()).status, 403)
+      assert.equal(row.version, replacement)
+    }
+    role = 'admin'
+    assert.equal((await remove('../unsafe')).status, 400)
+    assert.equal((await remove(version)).status, 409)
+    assert.equal(row.version, replacement)
+    assert.equal((await remove()).status, 200)
+    assert.equal(audits, 1)
+    assert.equal((await (await fetch(base)).json()).data, null)
+    assert.equal((await fetch(`${base}/imagen?v=${replacement}`)).status, 404)
+    assert.deepEqual(await fs.readdir(directory), [])
+    assert.equal((await remove()).status, 200)
+    assert.equal(audits, 1)
+    assert.equal((await upload(12, randomUUID())).status, 200)
   } finally {
     server.closeAllConnections(); await new Promise(resolve => server.close(resolve))
     delete require.cache[dbPath]

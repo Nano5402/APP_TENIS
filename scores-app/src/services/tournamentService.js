@@ -1,6 +1,7 @@
 import api from './api'
 
 export const tournamentService = {
+  setArchived: (id, archivado, esperado) => api.put(`/torneos/${id}/archivo`, { archivado, esperado }),
   getRetirements: (id) => api.get(`/torneos/${id}/retiros`),
   getRetirementParticipants: (id) => api.get(`/torneos/${id}/retiros/participantes`),
   getRetirementAudit: (id) => api.get(`/torneos/${id}/retiros/auditoria`),
@@ -16,5 +17,5 @@ export const tournamentService = {
   getById: (id) => api.get(`/torneos/${id}`),
   create: (data) => api.post('/torneos', data),
   update: (id, data) => api.put(`/torneos/${id}`, data),
-  remove: (id) => api.delete(`/torneos/${id}`),
+  remove: (id, options) => api.delete(`/torneos/${id}`, options),
 }

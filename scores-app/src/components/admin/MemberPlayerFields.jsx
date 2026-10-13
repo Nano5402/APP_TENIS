@@ -22,7 +22,7 @@ export default function MemberPlayerFields({ value, onChange, onSelectPlayer, no
   const filtered = available.filter((p) => `${p.nombre} ${p.apellido} ${p.id}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()) || String(p.id) === String(value.id))
   const selected = available.find((p) => String(p.id) === String(value.id))
   return <fieldset className='min-w-0 rounded-xl border p-4 space-y-3' style={{ borderColor: 'var(--border-color)' }}>
-    <legend className='px-2 font-semibold text-sm'>Jugador de este miembro</legend>
+    <legend className='px-2 font-semibold text-sm'>Ficha de jugador de esta cuenta</legend>
     <label className='form-group'><span className='form-label'>Vinculación de jugador</span>
       <select className='form-input' value={value.modo} onChange={(e) => onChange({ modo: e.target.value, deporte: 'tenis', categoria_id: '' })}>
         <option value='ninguno'>Sin jugador por ahora</option>
@@ -40,7 +40,7 @@ export default function MemberPlayerFields({ value, onChange, onSelectPlayer, no
           const player = available.find((p) => String(p.id) === e.target.value)
           if (player) onSelectPlayer(player)
         }}><option value=''>Selecciona un jugador</option>{filtered.map((p) => <option key={p.id} value={p.id}>#{p.id} · {p.nombre} {p.apellido} · {p.deporte}</option>)}</select></label>
-        <p className='text-xs' style={{ color: 'var(--text-muted)' }}>Solo aparecen jugadores activos sin cuenta. Al seleccionar uno se copian sus nombres; su foto, partidos e historial no se modifican.</p>
+        <p className='text-xs' style={{ color: 'var(--text-muted)' }}>Jugadores activos sin cuenta vinculada.</p>
         {selected && <p className='text-sm font-medium'>Vincular: {selected.nombre} {selected.apellido} · #{selected.id}</p>}
       </> : <>
         <p className='text-sm'>Nuevo jugador: <strong>{nombre || 'Nombre'} {apellido || 'Apellido'}</strong>. Se usarán los nombres escritos arriba.</p>

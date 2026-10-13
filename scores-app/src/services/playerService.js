@@ -6,7 +6,7 @@ export const playerService = {
   getById: (id) => api.get(`/jugadores/${id}`),
   create: (data) => api.post('/jugadores', data),
   update: (id, data) => api.put(`/jugadores/${id}`, data),
-  remove: (id) => api.delete(`/jugadores/${id}`),
+  remove: (id, options) => api.delete(`/jugadores/${id}`, options),
   uploadFoto: (id, file) => {
     const data = new FormData()
     data.append('foto', file)

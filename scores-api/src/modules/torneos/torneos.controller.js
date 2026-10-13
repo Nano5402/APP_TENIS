@@ -4,8 +4,8 @@ const { success, error } = require('../../utils/response')
 // ── Listar todos ────────────────────────────────────────────────────────────────
 exports.getAll = async (req, res) => {
   try {
-    const { deporte, estado, modalidad } = req.query
-    const data = await torneosService.getAll({ deporte, estado, modalidad })
+    const { deporte, estado, modalidad, archivo } = req.query
+    const data = await torneosService.getAll({ deporte, estado, modalidad, archivo })
     return success(res, data)
   } catch (err) {
     return error(res, err.message || 'Error al obtener torneos', err.status || 500)
@@ -35,10 +35,10 @@ exports.create = async (req, res) => {
 // ── Actualizar ──────────────────────────────────────────────────────────────────
 exports.update = async (req, res) => {
   try {
-    const data = await torneosService.update(req.params.id, req.body)
+    const data = await torneosService.update(req.params.id, req.body, req.user.id)
     return success(res, data)
   } catch (err) {
-    return error(res, err.message || 'Error al actualizar torneo', err.status || 500)
+    return error(res, err.status ? err.message : 'No se pudo guardar el torneo. No se guardaron cambios; intenta nuevamente.', err.status || 500)
   }
 }
 

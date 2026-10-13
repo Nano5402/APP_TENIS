@@ -177,7 +177,7 @@ export default function GestionPartidos() {
       teamService.getAll(),
       userService.getAll(),
       sedeService.getAll(),
-      tournamentService.getAll(),
+      tournamentService.getAll({ archivo: 'todos' }),
       categoriaService.getAll(),
     ])
       .then(async ([p, j, e, u, locations, tournaments, categories]) => {
@@ -362,8 +362,17 @@ export default function GestionPartidos() {
         delete payload.equipo1_id
         delete payload.equipo2_id
       }
+      // Save rechecks on the server under a scheduling lock; this preview is not authoritative.
+      const review = await matchService.checkSchedule({ ...payload, id: editing?.id || null })
+      const checks = review.data || {}
+      if (checks.conflicts?.length) throw new Error(checks.conflicts.map(c => c.message).join('\n'))
+      if (checks.warnings?.length && !(await confirm({
+        title: 'Revisa duración y descanso',
+        message: `${checks.warnings.map(w => w.message).join('\n')}\nReferencia orientativa: 2 horas entre inicios, no una duración obligatoria. ¿Guardar esta programación?`,
+        confirmLabel: 'Guardar programación',
+      }))) return
       if (editing) {
-        await matchService.update(editing.id, payload)
+        await matchService.update(editing.id, { ...payload, expected_control_version: editing.control_version })
         addToast({ type: 'success', title: 'Partido actualizado' })
       } else {
         await matchService.create(payload)
@@ -443,6 +452,7 @@ export default function GestionPartidos() {
 
   const filtered = useMemo(() => {
     return partidos.filter((p) => {
+      if (searchParams.get('partido') && String(p.id) !== searchParams.get('partido')) return false
       if (filterTab !== 'todos' && p.estado !== filterTab) return false
       if (filterTorneo === 'sin_torneo') {
         if (p.torneo?.id) return false
@@ -469,7 +479,7 @@ export default function GestionPartidos() {
       }
       return true
     })
-  }, [partidos, filterTab, filterTorneo, filterDeporte, search])
+  }, [partidos, filterTab, filterTorneo, filterDeporte, search, searchParams])
 
   return (
     <div className='space-y-6 animate-fade-up'>
@@ -488,6 +498,12 @@ export default function GestionPartidos() {
       </div>
 
       {/* Modal nuevo/editar */}
+      {searchParams.get('partido') && <div className='card p-3 text-sm flex flex-wrap gap-3 items-center justify-between'>
+        <span>Revisando partido #{searchParams.get('partido')}</span>
+        <button type='button' className='btn-secondary px-3 py-2' onClick={() => setSearchParams(prev => {
+          const next = new URLSearchParams(prev); next.delete('partido'); return next
+        })}>Ver los demás partidos</button>
+      </div>}
       <Modal
         isOpen={showForm}
         onClose={() => setShowForm(false)}
@@ -536,7 +552,7 @@ export default function GestionPartidos() {
                   })}
                 >
                 <option value=''>Partido libre (sin torneo)</option>
-                {torneos.map((tournament) => (
+                {torneos.filter(t => !t.archivado || Number(editing?.torneo?.id) === Number(t.id)).map((tournament) => (
                   <option key={tournament.id} value={tournament.id}>
                     {tournament.nombre} ·{' '}
                     {tournament.modalidad === 'dobles' ? 'Dobles' : 'Individual'} ·{' '}
@@ -1197,7 +1213,8 @@ export default function GestionPartidos() {
       </div>
 
       {/* Filtros por Estado */}
-      <Tabs tabs={FILTER_TABS} activeTab={filterTab} onChange={setFilterTab} />
+      <Link to='/admin/agenda' className='btn-secondary inline-flex px-4 py-2'>Ver agenda por cancha</Link>
+      <Tabs tabs={FILTER_TABS} activeTab={filterTab} onChange={setFilterTab} className='flex-wrap' />
 
       <BulkDelete
         records={filtered}

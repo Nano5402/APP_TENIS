@@ -20,6 +20,7 @@ export default function MatchPhotoCapture({ matchId, userId, finished, deferUplo
   const [momento, setMomento] = useState(finished ? 'final' : 'inicio')
   const [consent, setConsent] = useState(false)
   const [preview, setPreview] = useState('')
+  const [crop, setCrop] = useState({ zoom: 1, x: 50, y: 50 })
   const dialog = useRef(null)
   const working = useRef(false)
   const priority = useRef(deferUpload)
@@ -84,7 +85,7 @@ export default function MatchPhotoCapture({ matchId, userId, finished, deferUplo
     const file = event.target.files?.[0]; event.target.value = ''
     if (!file) return
     setBusy(true); setMessage('')
-    try { setDraft(await compressPhoto(file)); setConsent(false) }
+    try { setDraft(await compressPhoto(file)); setCrop({ zoom: 1, x: 50, y: 50 }); setConsent(false) }
     catch (error) { setMessage(error.message || 'No se pudo abrir la imagen') }
     finally { setBusy(false) }
   }
@@ -93,7 +94,7 @@ export default function MatchPhotoCapture({ matchId, userId, finished, deferUplo
     if (photo && !window.confirm('Este partido ya tiene una foto. ¿Reemplazarla por esta imagen?')) return
     setBusy(true)
     try {
-      const item = { blob: draft, version: crypto.randomUUID(), expected: photo?.version || '', momento, createdAt: Date.now() }
+      const item = { blob: draft, encuadre: crop, version: crypto.randomUUID(), expected: photo?.version || '', momento, createdAt: Date.now() }
       await photoDraft(key, 'put', item)
       setPending(item); setDraft(null); setBlocked(false); setMessage('Foto pendiente de envío. Puedes cerrar esta ventana y seguir marcando.')
     } catch { setMessage('No hay espacio para guardar la foto de forma segura en el dispositivo. Libera espacio y reintenta.') }
@@ -107,7 +108,7 @@ export default function MatchPhotoCapture({ matchId, userId, finished, deferUplo
     } catch { setMessage('Conéctate para consultar la foto actual antes de descartar la pendiente.') }
   }
   return <>
-    <button className='judge-tool' disabled={disabled} onClick={() => { setOpen(true); if (!known || !storageReady) retryNow() }} aria-label={pending ? 'Foto del partido pendiente' : 'Foto del partido'}><Camera size={17} /><span className='text-xs'>{pending ? 'Pendiente' : 'Foto'}</span></button>
+    <button className='judge-tool' disabled={disabled} onClick={() => { setOpen(true); retryNow() }} aria-label={pending ? 'Foto del partido pendiente' : 'Foto del partido'}><Camera size={17} /><span className='text-xs'>{pending ? 'Pendiente' : 'Foto'}</span></button>
     <dialog ref={dialog} onCancel={() => setOpen(false)} className='rounded-2xl p-5 w-[min(94vw,520px)] max-h-[90dvh] overflow-auto backdrop:bg-black/60' style={{ background: 'var(--bg-card)', color: 'var(--text-primary)' }}>
       <div className='flex items-center justify-between mb-3'><h2 className='font-bold'>Una foto del partido</h2><button onClick={() => setOpen(false)} aria-label='Cerrar fotografía'><X /></button></div>
       <p className='text-sm mb-3'>Puedes tomarla al inicio o al final. No es obligatoria para marcar puntos.</p>
@@ -117,11 +118,15 @@ export default function MatchPhotoCapture({ matchId, userId, finished, deferUplo
             <span className='text-emerald-400'>● MARCO OFICIAL CON PATROCINADORES</span>
             <span>{PHOTOCALL_SPONSORS.length} MARCAS</span>
           </div>
+          <div className='relative aspect-[3/2] overflow-hidden rounded-lg'>
+          <div aria-hidden='true' className='absolute inset-0 bg-cover bg-center blur-xl opacity-50' style={{ backgroundImage: `url("${preview || photoUrl(matchId, photo.version, true)}")` }} />
           <img
             src={preview || photoUrl(matchId, photo.version, true)}
             alt='Vista previa de la foto del partido'
-            className='rounded-lg w-full object-contain max-h-56'
+            className='relative w-full h-full object-contain'
+            style={{ transform: `scale(${(draft ? crop : pending?.encuadre || photo?.encuadre)?.zoom || 1})`, transformOrigin: `${(draft ? crop : pending?.encuadre || photo?.encuadre)?.x ?? 50}% ${(draft ? crop : pending?.encuadre || photo?.encuadre)?.y ?? 50}%` }}
           />
+          </div>
           <div className='flex gap-1.5 overflow-x-auto py-1 mt-2 justify-center opacity-85'>
             {PHOTOCALL_SPONSORS.slice(0, 7).map((s, i) => (
               <span key={i} className='bg-white rounded px-1.5 py-0.5 shrink-0'>
@@ -144,6 +149,12 @@ export default function MatchPhotoCapture({ matchId, userId, finished, deferUplo
           <label className='btn-secondary cursor-pointer'>Elegir imagen<input className='sr-only' type='file' accept='image/jpeg,image/png,image/webp' disabled={busy || !known || !restored || !storageReady} onChange={choose} /></label>
         </div>
         {draft && <div className='space-y-3'>
+          <fieldset className='rounded-xl border p-3 space-y-2' disabled={busy}>
+            <legend className='text-sm font-semibold px-1'>Ajustar encuadre</legend>
+            <p className='text-xs text-muted'>Acerca y desplaza la foto. Revisa que todas las personas queden dentro del marco; la foto completa se conserva.</p>
+            {[['zoom', 'Acercamiento', 1, 2.5, .05], ['x', 'Horizontal', 0, 100, 1], ['y', 'Vertical', 0, 100, 1]].map(([key, label, min, max, step]) => <label className='flex items-center gap-3 text-sm' key={key}><span className='w-28 shrink-0'>{label}</span><input aria-label={label} className='min-w-0 w-full accent-green-700 h-8' type='range' min={min} max={max} step={step} value={crop[key]} disabled={key !== 'zoom' && crop.zoom === 1} onChange={e => setCrop(c => ({ ...c, [key]: Number(e.target.value) }))} /></label>)}
+            <button type='button' className='text-sm underline min-h-10' onClick={() => setCrop({ zoom: 1, x: 50, y: 50 })}>Ver foto completa</button>
+          </fieldset>
           <label className='block text-sm'>Momento de la foto<select className='input w-full' value={momento} onChange={e => setMomento(e.target.value)}><option value='inicio'>Inicio del partido</option><option value='final'>Final del partido</option></select></label>
           <label className='flex gap-2 text-sm'><input type='checkbox' checked={consent} onChange={e => setConsent(e.target.checked)} />Confirmo que cuento con autorización para mostrar esta foto en el detalle público del partido.</label>
           <button className='btn-primary w-full' disabled={busy || !consent} onClick={save}>{photo ? 'Reemplazar foto del partido' : 'Guardar foto del partido'}</button>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { AlertTriangle, X } from 'lucide-react'
 import useConfirmStore from '../../store/useConfirmStore'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
@@ -31,7 +32,7 @@ export default function ConfirmDialog() {
     if (isOpen) setTyped('')
   }, [isOpen])
 
-  if (!isOpen) return null
+  if (!isOpen || typeof document === 'undefined') return null
 
   const needsTyping = Boolean(requireText)
   const canConfirm = !needsTyping || typed.trim() === requireText.trim()
@@ -47,9 +48,11 @@ export default function ConfirmDialog() {
     close()
   }
 
-  return (
+  // Confirmations can be opened from Modal (z-index 9999). Keep them outside
+  // layout stacking contexts and above the form that is awaiting the answer.
+  return createPortal(
     <div
-      className='fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-up'
+      className='fixed inset-0 z-[10000] flex items-center justify-center p-4 animate-fade-up'
       style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
       onClick={handleCancel}
     >
@@ -155,6 +158,7 @@ export default function ConfirmDialog() {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

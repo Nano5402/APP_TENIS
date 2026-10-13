@@ -40,7 +40,7 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const { user } = useAuthStore()
   const isAdmin = user?.rol === 'admin'
-  const isOfficial = user?.rol === 'admin' || user?.rol === 'juez'
+  const isOfficial = ['admin', 'juez', 'juez_director'].includes(user?.rol)
 
   return (
     <header className='app-header top-navigation sticky top-0 z-50'>

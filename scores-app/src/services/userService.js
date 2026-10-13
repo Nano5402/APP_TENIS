@@ -1,6 +1,7 @@
 import api from './api'
 
 export const userService = {
+  linkPlayer: (id, jugador_id) => api.put(`/users/${id}/jugador`, { jugador_id }),
   changePassword: (data) => api.put('/users/me/password', data),
   getAll: (params = {}) => api.get('/users', { params }),
   getJudges: () => api.get('/users/jueces'),

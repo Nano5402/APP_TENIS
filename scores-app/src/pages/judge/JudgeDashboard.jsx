@@ -190,7 +190,7 @@ export default function JudgeDashboard() {
       origen_partido2_id: editing?.origen_partido2?.id || null,
     }
     try {
-      if (editing) await matchService.update(editing.id, payload)
+      if (editing) await matchService.update(editing.id, { ...payload, expected_control_version: editing.control_version })
       else await matchService.create(payload)
       addToast({ type: 'success', title: editing ? 'Partido actualizado' : 'Partido creado' })
       setShowForm(false)

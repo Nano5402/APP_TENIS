@@ -6,6 +6,7 @@ import useAuthStore from '../../store/useAuthStore'
 import Button from '../ui/Button'
 import Avatar from '../ui/Avatar'
 import { Link } from 'react-router-dom'
+import LinkPlayer from './LinkPlayer'
 
 export default function UserEditor({ user, mode, onClose, onSaved }) {
   const [draft, setDraft] = useState(user)
@@ -70,6 +71,7 @@ export default function UserEditor({ user, mode, onClose, onSaved }) {
           </div>}
           <div className='flex justify-end gap-3'><Button type='button' variant='secondary' disabled={busy} onClick={onClose}>Cancelar</Button><Button type='submit' loading={busy}>Guardar cambios</Button></div>
         </form>
+        {!photo && !reset && !busy && <LinkPlayer user={user} onSaved={() => { onSaved(); onClose() }} />}
         {!busy && <Link className='block mt-4 text-sm underline' to='/admin/partidos'>Administrar partidos (todos)</Link>}
       </section>
     </div>, document.body

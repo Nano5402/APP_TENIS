@@ -28,6 +28,7 @@ import { createJudgeSession } from '../../utils/judgeSession'
 import { confirm } from '../../utils/confirm'
 import MatchStats from '../../components/match/MatchStats'
 import MatchPhotoCapture from '../../components/match/MatchPhotoCapture'
+import MatchCaddie from '../../components/match/MatchCaddie'
 import ModalFinalizarW from '../../components/match/ModalFinalizarW'
 import ModalCancelarPartido from '../../components/match/ModalCancelarPartido'
 import ModalAsignarCancha from '../../components/match/ModalAsignarCancha'
@@ -73,6 +74,7 @@ export default function JuezPartidos() {
   const [quick, setQuick] = useState(false)
   const [pending, setPending] = useState(null)
   const [panel, setPanel] = useState(null)
+  const [preflightChecked, setPreflightChecked] = useState(false)
   const [firstServers, setFirstServers] = useState(['', ''])
   const [suspending, setSuspending] = useState(false)
   const [suspensionReason, setSuspensionReason] = useState('')
@@ -81,6 +83,7 @@ export default function JuezPartidos() {
   const [reviewChecked, setReviewChecked] = useState(false)
   const [online, setOnline] = useState(navigator.onLine)
   const [nameDraft, setNameDraft] = useState(['', ''])
+  const [nameVersion, setNameVersion] = useState(null)
   const [nameBusy, setNameBusy] = useState(false)
   const [nameError, setNameError] = useState('')
   const isDirectorOrAdmin = ['admin', 'juez_director'].includes(user?.rol)
@@ -413,6 +416,7 @@ export default function JuezPartidos() {
 
   const state = isPractice ? practiceControl : view.control
   const match = isPractice ? practiceMatch : (state?.partido || view.match)
+  useEffect(() => { setPreflightChecked(false) }, [match?.id, match?.control_version])
   const names = { jugador1: getParticipantName(match || {}, 1) || 'Jugador 1', jugador2: getParticipantName(match || {}, 2) || 'Jugador 2' }
   const score = state?.marcador
   const live = state?.en_vivo
@@ -523,6 +527,7 @@ export default function JuezPartidos() {
     }
   }
   const openSettings = () => {
+    setNameVersion(match?.control_version)
     setNameDraft([match?.nombre_override_j1 || '', match?.nombre_override_j2 || ''])
     setNameError(''); setPanel('settings')
   }
@@ -544,7 +549,7 @@ export default function JuezPartidos() {
     }
     setNameBusy(true); setNameError('')
     try {
-      await matchService.updateParticipants(selectedId, { nombre_override_j1: nameDraft[0] || null, nombre_override_j2: nameDraft[1] || null })
+      await matchService.updateParticipants(selectedId, { nombre_override_j1: nameDraft[0] || null, nombre_override_j2: nameDraft[1] || null, expected_control_version: nameVersion })
       await sessionRef.current.sync()
       setPanel(null)
     } catch (error) { setNameError(error.message || 'No se pudieron guardar los nombres') }
@@ -619,7 +624,7 @@ export default function JuezPartidos() {
                   </span>
                 </div>
                 <p className='text-xs mt-1 max-w-xl leading-relaxed' style={{ color: 'var(--text-muted)' }}>
-                  Inicia un partido de prueba interactivo para practicar el arbitraje, conteo de puntos, desempates y uso de la mesa. No se guarda en la base de datos, no afecta estadísticas ni aparecerá en la programación pública.
+                  Practica la marcación sin afectar partidos ni estadísticas.
                 </p>
               </div>
             </div>
@@ -647,13 +652,16 @@ export default function JuezPartidos() {
           {/* Pestañas de Estado (Programados, Finalizados, Todos) */}
           <div className='flex flex-wrap items-center gap-2'>
             <div
-              className='flex p-1 rounded-xl border text-xs font-semibold'
+              role='group'
+              aria-label='Estado de los partidos'
+              className='grid grid-cols-2 sm:grid-cols-4 w-full sm:w-auto min-w-0 gap-1 p-1 rounded-xl border text-xs font-semibold'
               style={{ backgroundColor: 'var(--bg-sidebar)', borderColor: 'var(--border-color)' }}
             >
               <button
                 type='button'
                 onClick={() => setStatusTab('programados')}
-                className='px-3 py-1.5 rounded-lg transition-all flex items-center gap-2'
+                aria-pressed={statusTab === 'programados'}
+                className='min-w-0 min-h-11 px-2 sm:px-3 py-1.5 rounded-lg transition-all flex flex-wrap justify-center items-center gap-1.5'
                 style={{
                   backgroundColor: statusTab === 'programados' ? 'var(--color-brand)' : 'transparent',
                   color: statusTab === 'programados' ? 'var(--color-brand-contrast)' : 'var(--text-muted)',
@@ -674,7 +682,8 @@ export default function JuezPartidos() {
               <button
                 type='button'
                 onClick={() => setStatusTab('finalizados')}
-                className='px-3 py-1.5 rounded-lg transition-all flex items-center gap-2'
+                aria-pressed={statusTab === 'finalizados'}
+                className='min-w-0 min-h-11 px-2 sm:px-3 py-1.5 rounded-lg transition-all flex flex-wrap justify-center items-center gap-1.5'
                 style={{
                   backgroundColor: statusTab === 'finalizados' ? 'var(--color-brand)' : 'transparent',
                   color: statusTab === 'finalizados' ? 'var(--color-brand-contrast)' : 'var(--text-muted)',
@@ -695,7 +704,8 @@ export default function JuezPartidos() {
               <button
                 type='button'
                 onClick={() => setStatusTab('cancelados')}
-                className='px-3 py-1.5 rounded-lg transition-all flex items-center gap-2'
+                aria-pressed={statusTab === 'cancelados'}
+                className='min-w-0 min-h-11 px-2 sm:px-3 py-1.5 rounded-lg transition-all flex flex-wrap justify-center items-center gap-1.5'
                 style={{
                   backgroundColor: statusTab === 'cancelados' ? '#ef4444' : 'transparent',
                   color: statusTab === 'cancelados' ? '#ffffff' : 'var(--text-muted)',
@@ -717,7 +727,8 @@ export default function JuezPartidos() {
               <button
                 type='button'
                 onClick={() => setStatusTab('todos')}
-                className='px-3 py-1.5 rounded-lg transition-all flex items-center gap-2'
+                aria-pressed={statusTab === 'todos'}
+                className='min-w-0 min-h-11 px-2 sm:px-3 py-1.5 rounded-lg transition-all flex flex-wrap justify-center items-center gap-1.5'
                 style={{
                   backgroundColor: statusTab === 'todos' ? 'var(--color-brand)' : 'transparent',
                   color: statusTab === 'todos' ? 'var(--color-brand-contrast)' : 'var(--text-muted)',
@@ -826,11 +837,6 @@ export default function JuezPartidos() {
           </div>
 
           {listError && <p role='alert' className='text-xs text-red-500'>{listError}</p>}
-          {!exclusive && (
-            <p role='status' className='text-sm'>
-              Abre la mesa en una sola pestaña y usa un navegador actualizado con HTTPS. Si tienes otra mesa abierta, ciérrala y recarga esta.
-            </p>
-          )}
           {listLoading && <p role='status'>Cargando partidos…</p>}
           {!listLoading && !visibleMatches.length && (
             <p className='card p-5 text-center text-sm text-[var(--text-muted)]'>
@@ -1080,7 +1086,7 @@ export default function JuezPartidos() {
               <div className='flex items-center gap-2.5'>
                 <Sparkles size={18} style={{ color: 'var(--color-brand)' }} className='shrink-0' />
                 <span className='text-xs sm:text-sm font-medium' style={{ color: 'var(--text-primary)' }}>
-                  <strong style={{ color: 'var(--color-brand)' }}>MODO PRÁCTICA:</strong> Partido virtual de entrenamiento ({match?.modalidad === 'dobles' ? 'Dobles' : 'Individual'}). No se guarda en base de datos ni afecta estadísticas.
+                  <strong style={{ color: 'var(--color-brand)' }}>PRÁCTICA:</strong> {match?.modalidad === 'dobles' ? 'Dobles' : 'Individual'} · Sin resultados oficiales.
                 </span>
               </div>
               <button
@@ -1112,9 +1118,9 @@ export default function JuezPartidos() {
             >
               <ArrowLeft size={17} /> Partidos
             </button>
-            <span className='text-xs truncate'>
+            <button type='button' className='judge-tool text-xs min-w-0' disabled={isPractice || finished || adminLocked} onClick={() => setMatchToCourt(match)} aria-label='Confirmar o cambiar cancha'>
               {isPractice ? 'Partido de Prueba (Virtual)' : (match?.cancha?.nombre || 'Mesa de juez')}
-            </span>
+            </button>
             {!isPractice && (
               <MatchPhotoCapture
                 key={`${userId}:${selectedId}`}
@@ -1492,11 +1498,14 @@ export default function JuezPartidos() {
                   </div>
                 </>
               )}
+              {!isPractice && (!playing || finished) && <MatchCaddie key={`caddie-${match.id}`} matchId={match.id} status={match.estado} disabled={adminLocked} />}
               {!playing && !finished && (
                 <section className='judge-state-card'>
                   <span className='judge-eyebrow'>ANTES DEL PRIMER SAQUE</span>
                   <h2>Todo listo para comenzar</h2>
-                  <p>Comprueba los participantes y la cancha. Al iniciar se activa la marcación.</p>
+                  <p className='font-semibold'>{names.jugador1} · vs. · {names.jugador2}</p>
+                  <p>Cancha: {match?.cancha?.nombre || 'Sin asignar'} · Primer saque: {servingName || names[server]}</p>
+                  {!isPractice && <button type='button' className='btn-secondary w-full min-h-11 my-2' disabled={adminLocked} onClick={() => setMatchToCourt(match)}><MapPin size={17} />Confirmar o cambiar cancha</button>}
                   <div className='judge-preflight'>
                     <span>
                       Formato<strong>Al mejor de {state?.reglas?.mejor_de ?? '—'} sets</strong>
@@ -1508,9 +1517,10 @@ export default function JuezPartidos() {
                   <p>
                     El saque cambia automáticamente. Si necesitas corregir el sacador inicial, entra en Ajustes después de iniciar y antes de anotar el primer punto.
                   </p>
+                  <label className='flex items-start gap-3 text-sm py-2'><input type='checkbox' className='mt-1' checked={preflightChecked} onChange={e => setPreflightChecked(e.target.checked)} />He revisado participantes, cancha, formato y primer saque.</label>
                   <button
                     className='btn-primary py-4 w-full'
-                    disabled={adminLocked}
+                    disabled={adminLocked || !preflightChecked}
                     onClick={() => write((id) => matchService.startLive(id))}
                   >
                     <Play size={18} /> Iniciar partido
@@ -1541,7 +1551,7 @@ export default function JuezPartidos() {
                       ? 'PARTIDO DE PRÁCTICA FINALIZADO'
                       : live?.estado === 'cancelado'
                       ? 'ENCUENTRO CANCELADO'
-                      : 'CIERRE DEL ENCUENTRO'}
+                      : view.pendingCount || view.needsSync ? 'CIERRE PENDIENTE DE CONFIRMACIÓN' : 'RESULTADO CONFIRMADO EN EL SERVIDOR'}
                   </span>
                   <h2>
                     {score.ganador
@@ -1577,7 +1587,7 @@ export default function JuezPartidos() {
                   )}
                 </section>
               )}
-              <div className='judge-bottom-controls'>
+              <div className='judge-bottom-controls' style={playing && !isPractice ? { gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' } : undefined}>
                 {playing && (
                   <button
                     className='judge-tool'
@@ -1603,6 +1613,7 @@ export default function JuezPartidos() {
                 <button className='judge-tool' disabled={view.busy} onClick={() => setPanel('stats')}>
                   <BarChart3 size={18} /> Estadísticas
                 </button>
+                {playing && !isPractice && <button className='judge-tool' disabled={view.busy} onClick={() => setPanel('caddie')}><UserCheck size={18} />Caddie</button>}
                 <button className='judge-tool' disabled={view.busy} onClick={openSettings}>
                   <Settings2 size={18} /> Ajustes
                 </button>
@@ -1699,7 +1710,8 @@ export default function JuezPartidos() {
             </JudgePanel>
           )}
 
-          {panel && (
+          {panel === 'caddie' && <JudgePanel title='Caddie del partido' onClose={() => setPanel(null)} busy={view.busy}><MatchCaddie matchId={match.id} status={match.estado} disabled={adminLocked} /></JudgePanel>}
+          {panel && panel !== 'caddie' && (
             <JudgePanel
               title={
                 panel === 'stats'
@@ -1780,7 +1792,7 @@ export default function JuezPartidos() {
                   )}
 
                   <p className='text-xs'>
-                    El saque cambia automáticamente. Corrígelo aquí solo si es necesario.
+                    Corregir sacador
                   </p>
                   <button
                     className='judge-tool w-full'
@@ -1837,7 +1849,7 @@ export default function JuezPartidos() {
                     >
                       <h3 className='font-semibold'>Orden de saque · set {state.raw_marcador?.currentSet}</h3>
                       <p>
-                        Antes del primer saque del set, selecciona quién sirve primero dentro de cada pareja. Los compañeros se alternarán automáticamente en los juegos y desempates. Vuelve a confirmar al comenzar otro set.
+                        Elige el primer sacador de cada pareja al comenzar el set.
                       </p>
                       {[1, 2].map((team, i) => (
                         <label key={team} className='text-sm'>
@@ -1879,7 +1891,7 @@ export default function JuezPartidos() {
                     <form className='space-y-3' onSubmit={saveNames}>
                       <h3 className='font-semibold'>Nombres en pantalla</h3>
                       <p className='text-xs'>
-                        Solo cambia la etiqueta; no sustituye al jugador registrado. Vacío restaura su nombre.
+                        Cambia el nombre mostrado, no el participante. Déjalo vacío para usar el nombre registrado.
                       </p>
                       {nameDraft.map((name, index) => (
                         <label key={index} className='block text-sm'>
@@ -1944,11 +1956,13 @@ export default function JuezPartidos() {
 
       {matchToCourt && (
         <ModalAsignarCancha
+          allowUnassigned={user?.rol !== 'juez'}
           isOpen={Boolean(matchToCourt)}
           onClose={() => setMatchToCourt(null)}
           match={matchToCourt}
-          onSuccess={() => {
+          onSuccess={async () => {
             setMatchToCourt(null)
+            if (view.match) await sessionRef.current?.sync?.()
             refreshMatches()
           }}
         />

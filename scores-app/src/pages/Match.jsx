@@ -14,6 +14,7 @@ import ClayCourt from '../components/match/ClayCourt'
 import MatchJudge from '../components/match/MatchJudge'
 import MatchPhoto from '../components/match/MatchPhoto'
 import MatchPhotoCapture from '../components/match/MatchPhotoCapture'
+import MatchCaddie from '../components/match/MatchCaddie'
 import useAuthStore from '../store/useAuthStore'
 import { MatchCardSkeleton } from '../components/ui/Skeleton'
 import RetirementNotice from '../components/match/RetirementNotice'
@@ -235,6 +236,7 @@ export default function Match() {
           finished={match.estado === 'finalizado'}
         />
       )}
+      {user && <MatchCaddie key={`caddie-${match.id}`} matchId={match.id} status={match.estado} />}
       <MatchPhoto key={match.id} matchId={match.id} match={match} />
       {(isLive || match.estado === 'finalizado') && match.deporte === 'tenis' && (
         <section className='card p-4 sm:p-5'>

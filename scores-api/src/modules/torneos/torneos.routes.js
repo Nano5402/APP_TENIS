@@ -35,6 +35,11 @@ const torneoRules = [
 // ── Rutas públicas (auth) ───────────────────────────────────────────────────────
 router.get('/', controller.getAll)
 router.get('/:id', controller.getById)
+router.put('/:id/archivo', requireAuth, requireAdmin, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store')
+  try { res.json({ ok: true, data: await require('./torneos.service').setArchived(req.params.id, req.body?.archivado, req.body?.esperado, req.user.id) }) }
+  catch (e) { res.status(e.status || 500).json({ ok: false, message: e.status ? e.message : 'No se pudo guardar el archivo. Actualiza y reintenta.' }) }
+})
 const groups = require('./grupos.service')
 const groupAction = (action) => async (req, res) => {
   try {
@@ -67,7 +72,7 @@ router.put(
   '/:id/grupos',
   requireAuth,
   requireAdmin,
-  groupAction((req) => groups.save(Number(req.params.id), req.body.grupos, req.body.version))
+  groupAction((req) => groups.save(Number(req.params.id), req.body.grupos, req.body.version, req.user.id))
 )
 router.get('/:torneo_id/posiciones', require('../posiciones/posiciones.controller').getByTorneo)
 router.get('/:torneo_id/posiciones/gestion', requireAuth,

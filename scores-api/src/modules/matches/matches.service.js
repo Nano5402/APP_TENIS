@@ -359,6 +359,7 @@ exports.create = async (body, actor) => {
   const scoring = normalizeScoringConfig(body)
   const judgeId = requester.rol === 'juez' ? requester.id : positiveId(body.juez_id)
   await validateJudge(judgeId)
+  await require('./scheduling.service').assertAvailable({ ...match, juez_id: judgeId }, db)
   const [result] = await db.query(
     `INSERT INTO partidos
        (torneo_id, deporte, categoria_id, jugador1_id, jugador2_id, equipo1_id, equipo2_id,
@@ -403,18 +404,33 @@ exports.create = async (body, actor) => {
   return exports.getById(result.insertId)
 }
 
+exports.checkSchedule = async (body, actor) => {
+  const requester = normalizeActor(actor)
+  const id = positiveId(body.id)
+  if (id) {
+    const [[existing]] = await db.query('SELECT id,juez_id,created_by FROM partidos WHERE id=?', [id])
+    if (!existing) throw { status: 404, message: 'Partido no encontrado' }
+    assertCanManage(existing, requester)
+  }
+  const match = await validateBasicMatch(body, id)
+  return require('./scheduling.service').check({ ...match, id,
+    juez_id: requester.rol === 'juez' ? requester.id : positiveId(body.juez_id) }, db)
+}
+
 exports.update = async (id, body, actor) => {
   const requester = normalizeActor(actor)
-  const [existing] = await db.query('SELECT id, juez_id, created_by FROM partidos WHERE id = ?', [
+  const [existing] = await db.query('SELECT * FROM partidos WHERE id = ?', [
     id,
   ])
   if (!existing.length) throw { status: 404, message: 'Partido no encontrado' }
   assertCanManage(existing[0], requester)
 
   const match = await validateBasicMatch(body, Number(id))
+  require('./edit-guards').assertIdentity(existing[0], match)
   const scoring = normalizeScoringConfig(body)
   const judgeId = requester.rol === 'juez' ? requester.id : positiveId(body.juez_id)
   await validateJudge(judgeId)
+  await require('./scheduling.service').assertAvailable({ ...match, id: Number(id), juez_id: judgeId }, db)
   await db.query(
     `UPDATE partidos
      SET torneo_id = ?, deporte = ?, categoria_id = ?, jugador1_id = ?, jugador2_id = ?,
@@ -505,8 +521,23 @@ exports.updateMarcador = async (id, { sets, estado, ganador }, actor) => {
   }
 
   const connection = await db.getConnection()
+  let scheduleLocked = false
   try {
+    if (['programado', 'en_vivo'].includes(estado)) {
+      await require('./scheduling.service').lock(connection)
+      scheduleLocked = true
+    }
     await connection.beginTransaction()
+    const [[scoreBefore]] = await connection.query('SELECT * FROM partidos WHERE id = ? FOR UPDATE', [id])
+    if (!scoreBefore) throw { status: 404, message: 'Partido no encontrado' }
+    assertCanManage(scoreBefore, requester)
+    const [setsBefore] = await connection.query('SELECT * FROM sets_partido WHERE partido_id = ? ORDER BY numero_set', [id])
+    if (scheduleLocked) {
+      const [current] = await connection.query('SELECT * FROM partidos WHERE id = ? FOR UPDATE', [id])
+      if (!current.length) throw { status: 404, message: 'Partido no encontrado' }
+      assertCanManage(current[0], requester)
+      await require('./scheduling.service').assertAvailable({ ...current[0], estado }, connection)
+    }
     await connection.query('UPDATE partidos SET estado = ?, ganador = ? WHERE id = ?', [
       estado,
       ganador || null,
@@ -560,11 +591,16 @@ exports.updateMarcador = async (id, { sets, estado, ganador }, actor) => {
     }
 
     await propagateWinner(connection, existing[0], estado, ganador)
+    if (estado === 'cancelado' && existing[0].estado !== 'cancelado')
+      await require('./schedule-notifications').notify(connection, existing[0], ['El encuentro fue cancelado.'])
+    const audit = require('../audit/edit-audit')
+    await audit.record(connection, 'resultado', id, requester, audit.scoreSnapshot(scoreBefore, setsBefore), audit.scoreSnapshot({ estado, ganador }, sets))
     await connection.commit()
   } catch (error) {
     await connection.rollback()
     throw error
   } finally {
+    if (scheduleLocked) await require('./scheduling.service').unlock(connection)
     connection.release()
   }
 
@@ -702,7 +738,9 @@ exports.updateParticipants = async (id, data, user) => {
   }
 
   params.push(id)
-  await db.query(`UPDATE partidos SET ${updates.join(', ')} WHERE id = ?`, params)
+  if (changedFields.length) await require('./scheduling.service').assertAvailable({ ...match,
+    ...Object.fromEntries(changedFields.map(k => [k, positiveId(data[k])])), id: Number(id) }, db)
+  await db.query(`UPDATE partidos SET ${updates.join(', ')}, control_version = control_version + 1 WHERE id = ?`, params)
 
   return exports.getById(id)
 }
@@ -1293,18 +1331,33 @@ for (const method of ['create', 'update', 'updateParticipants']) {
       const [[m]] = await pool.query('SELECT * FROM partidos WHERE id = ?', [args[0]])
       tournamentId = m?.torneo_id
     }
-    if (!tournamentId) return original(...args)
     const conn = await pool.getConnection()
+    let locked = false
     try {
+      await require('./scheduling.service').lock(conn); locked = true
       await conn.beginTransaction()
-      await conn.query('SELECT id FROM torneos WHERE id=? FOR UPDATE', [tournamentId])
+      if (tournamentId) await conn.query('SELECT id FROM torneos WHERE id=? FOR UPDATE', [tournamentId])
+      const before = method !== 'create' ? (await conn.query('SELECT * FROM partidos WHERE id = ? FOR UPDATE', [args[0]]))[0][0] : null
+      if (method !== 'create') {
+        if (!before) throw { status: 404, message: 'Partido no encontrado' }
+        assertCanManage(before, normalizeActor(args[2]))
+        require('./edit-guards').assertVersion(before, body?.expected_control_version)
+        // Full edits resolve source winners first; compare their normalized IDs below.
+        if (method === 'updateParticipants') require('./edit-guards').assertIdentity(before, body || {})
+      }
       const result = await transaction.run(conn, () => original(...args))
+      await require('./schedule-notifications').afterChange(conn, before)
+      if (before) {
+        const [[after]] = await conn.query('SELECT * FROM partidos WHERE id = ?', [args[0]])
+        await require('../audit/edit-audit').record(conn, 'partido', args[0], args[2], before, after)
+      }
       await conn.commit()
       return result
     } catch (e) {
       await conn.rollback()
       throw e
     } finally {
+      if (locked) await require('./scheduling.service').unlock(conn)
       conn.release()
     }
   }

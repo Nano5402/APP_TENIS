@@ -73,6 +73,10 @@ export default function GestionTorneos() {
   const [search, setSearch] = useState('')
   const [statusTab, setStatusTab] = useState('todos')
   const [deporteFilter, setDeporteFilter] = useState('todos')
+  const [archiveFilter, setArchiveFilter] = useState('activos')
+  const [archiveBusy, setArchiveBusy] = useState(null)
+  const [loadError, setLoadError] = useState('')
+  const [archiveFeedback, setArchiveFeedback] = useState(null)
   const { addToast } = useUIStore()
   const {
     register,
@@ -87,6 +91,7 @@ export default function GestionTorneos() {
 
   const filtered = useMemo(() => {
     return torneos.filter((t) => {
+      if (archiveFilter !== 'todos' && Boolean(t.archivado) !== (archiveFilter === 'archivados')) return false
       if (statusTab !== 'todos' && t.estado !== statusTab) return false
       if (deporteFilter !== 'todos' && t.deporte !== deporteFilter) return false
       if (search.trim()) {
@@ -97,20 +102,35 @@ export default function GestionTorneos() {
       }
       return true
     })
-  }, [torneos, statusTab, deporteFilter, search])
+  }, [torneos, statusTab, deporteFilter, search, archiveFilter])
 
   const fetchAll = () => {
     setLoading(true)
     tournamentService
-      .getAll()
-      .then((tournaments) => setTorneos(tournaments.data || []))
-      .catch(() => addToast({ type: 'error', title: 'Error al cargar los torneos' }))
+      .getAll({ archivo: 'todos' })
+      .then((tournaments) => { setTorneos(tournaments.data || []); setLoadError('') })
+      .catch(() => setLoadError('No se pudieron actualizar los torneos. Reintenta antes de realizar cambios.'))
       .finally(() => setLoading(false))
   }
 
   useEffect(() => {
     fetchAll()
   }, [])
+
+  const toggleArchive = async (tournament) => {
+    if (archiveBusy !== null || loading || loadError) return
+    const archived = Boolean(tournament.archivado)
+    if (!(await confirm({ title: archived ? 'Restaurar torneo' : 'Archivar torneo', message: archived ? `«${tournament.nombre}» volverá al listado habitual. Su estado deportivo y resultados no cambiarán.` : `«${tournament.nombre}» pasará a Archivados. Conserva sus ${tournament.partidos_count} partidos, inscripciones, resultados y jugadores. Esto NO cancela ni pausa los partidos que sigan pendientes o en vivo.`, confirmLabel: archived ? 'Restaurar torneo' : 'Archivar sin borrar' }))) return
+    setArchiveBusy(tournament.id)
+    setArchiveFeedback(null)
+    try {
+      await tournamentService.setArchived(tournament.id, !archived, archived)
+      setTorneos(list => list.map(t => t.id === tournament.id ? { ...t, archivado: !archived } : t))
+      addToast({type:'success',title: archived ? 'Torneo restaurado' : 'Torneo archivado sin borrar datos'})
+      setArchiveFeedback({ message: archived ? 'Torneo restaurado. Historial conservado.' : 'Torneo archivado sin borrar datos. Puedes restaurarlo desde Archivados.' })
+    } catch(e) { setArchiveFeedback({ error:true, message:e.message || 'No se pudo guardar. Actualiza y reintenta.' }) }
+    finally { setArchiveBusy(null) }
+  }
 
   const openCreate = () => {
     reset({
@@ -385,13 +405,19 @@ export default function GestionTorneos() {
       </div>
 
       <Tabs tabs={STATUS_TABS} activeTab={statusTab} onChange={setStatusTab} />
+      <div className='card p-4 flex flex-wrap gap-3 items-center justify-between'>
+        <label className='text-sm font-semibold'>Mostrar<select aria-label='Archivo de torneos' className='form-input mt-1 w-full' value={archiveFilter} onChange={e => setArchiveFilter(e.target.value)}><option value='activos'>Sin archivar</option><option value='archivados'>Archivados</option><option value='todos'>Todos, incluidos archivados</option></select></label>
+        <p className='text-xs text-[var(--text-secondary)] max-w-md'>Archivar organiza el listado; no elimina información ni cambia el estado deportivo.</p>
+      </div>
+      {loadError && <p role='alert' className='card p-4 text-sm text-red-600'>{loadError} <button className='underline' onClick={fetchAll}>Reintentar</button></p>}
+      {archiveFeedback && <p role={archiveFeedback.error ? 'alert' : 'status'} className={`card p-4 text-sm ${archiveFeedback.error ? 'text-red-600' : 'text-[var(--color-brand)]'}`}>{archiveFeedback.message}</p>}
 
-      <section className='space-y-3'>
+      {!loadError && <section className='space-y-3'>
         <BulkDelete
           records={filtered}
           remove={tournamentService.remove}
           onComplete={fetchAll}
-          disabled={loading}
+          disabled={loading || archiveBusy !== null}
           warning='Se eliminarán los torneos seleccionados con sus partidos, resultados, fotos registradas, inscripciones y grupos. Se conservan jugadores, parejas y el historial de auditoría.'
           label={(r) => r.nombre}
         />
@@ -432,6 +458,7 @@ export default function GestionTorneos() {
                     <h2 className='font-bold text-base' style={{ color: 'var(--text-primary)' }}>
                       {tournament.nombre}
                     </h2>
+                    {tournament.archivado && <span className='badge'>Archivado · historial conservado</span>}
                     <span className={ESTADO_BADGE[tournament.estado] || 'badge'}>
                       {ESTADOS.find((status) => status.value === tournament.estado)?.label}
                     </span>
@@ -459,6 +486,7 @@ export default function GestionTorneos() {
                   </div>
                 </div>
                 <div className='flex flex-wrap items-center gap-2 shrink-0'>
+                  <button type='button' className='btn-secondary px-3 py-2 text-xs' disabled={archiveBusy !== null || loading} onClick={() => toggleArchive(tournament)}>{archiveBusy === tournament.id ? 'Guardando…' : tournament.archivado ? 'Restaurar torneo' : 'Archivar torneo'}</button>
                   <Link to={`/torneo/${tournament.id}`} className='btn-secondary px-3 py-2 text-xs'>
                     Detalle e inscripciones
                   </Link>
@@ -474,14 +502,14 @@ export default function GestionTorneos() {
                   >
                     Partidos <ArrowRight className='w-3.5 h-3.5' />
                   </Link>
-                  <Link
+                  {!tournament.archivado && <Link
                     to={`/admin/partidos?torneo=${tournament.id}&crear=1`}
                     className='btn-secondary px-3 py-2 flex items-center gap-1.5 text-xs'
                     title='Programar un nuevo partido en este torneo'
                   >
                     <Plus className='w-3.5 h-3.5 text-[var(--color-brand)]' />
                     <span>Crear partido</span>
-                  </Link>
+                  </Link>}
                   <button
                     onClick={() => openEdit(tournament)}
                     className='btn-ghost p-2'
@@ -502,7 +530,7 @@ export default function GestionTorneos() {
             </article>
           ))
         )}
-      </section>
+      </section>}
     </div>
   )
 }

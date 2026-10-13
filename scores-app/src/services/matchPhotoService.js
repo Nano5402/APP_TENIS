@@ -2,6 +2,7 @@ import api from './api'
 
 export const photoUrl = (id, version, thumbnail = false) => `${api.defaults.baseURL.replace(/\/$/, '')}/partidos/${id}/foto/imagen?v=${encodeURIComponent(version)}${thumbnail ? '&miniatura=1' : ''}`
 export const getPhoto = id => api.get(`/partidos/${id}/foto`)
+export const removePhoto = (id, expected) => api.delete(`/partidos/${id}/foto`, { data: { expected }, suppressDeleteAlert: true })
 export const getPhotoStatus = id => api.get(`/partidos/${id}/foto/estado`)
 export const sendPhoto = (id, item, signal) => {
   const form = new FormData()
@@ -9,6 +10,7 @@ export const sendPhoto = (id, item, signal) => {
   form.append('expected', item.expected)
   form.append('momento', item.momento)
   form.append('consentimiento', 'true')
+  if (item.encuadre) form.append('encuadre', JSON.stringify(item.encuadre))
   form.append('foto', item.blob, 'partido.webp')
   return api.put(`/partidos/${id}/foto`, form, { headers: { 'Content-Type': undefined }, timeout: 60000, signal })
 }
@@ -43,7 +45,8 @@ export async function compressPhoto(file) {
     canvas.width = Math.max(1, Math.round(bitmap.width * scale))
     canvas.height = Math.max(1, Math.round(bitmap.height * scale))
     canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.78))
+    // Preserve facial detail before the server's metadata-stripping re-encode.
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.92))
     if (!blob || blob.size > 8 * 1024 * 1024) throw new Error('No se pudo reducir la foto. Selecciona otra.')
     return blob
   } finally { bitmap.close() }

@@ -15,6 +15,32 @@ const loadService = (fakeDb) => {
   return require(servicePath)
 }
 
+test('vincula ficha a una cuenta existente sin alterar el rol', async () => {
+  let committed=false, writes=[]
+  const conn={beginTransaction:async()=>{},commit:async()=>{committed=true},rollback:async()=>{},release(){},query:async(sql,params)=>{
+    if(sql.startsWith('SELECT id FROM users')) return [[{id:7}]]
+    if(sql.includes('WHERE user_id=')) return [[]]
+    if(sql.includes('SELECT id, activo')) return [[{id:9,activo:1,user_id:null}]]
+    if(sql.startsWith('UPDATE jugadores')) {writes.push([sql,params]); return [{affectedRows:1}]}
+    throw Error(sql)
+  }}
+  const service=loadService({getConnection:async()=>conn,query:async()=>[[{id:7,rol:'juez',jugador_id:9}]]})
+  await service.linkPlayer(7,9)
+  assert.equal(committed,true)
+  assert.equal(writes.length,1)
+  assert.deepEqual(writes[0][1],[7,9])
+})
+test('no reemplaza la ficha histórica de una cuenta', async () => {
+  let rolled=false
+  const service=loadService({getConnection:async()=>({beginTransaction:async()=>{},rollback:async()=>{rolled=true},release(){},query:async sql=>sql.includes('FROM users')?[[{id:7}]]:[[{id:9}]]})})
+  await assert.rejects(service.linkPlayer(7,10), e=>e.status===409)
+  assert.equal(rolled,true)
+})
+test('no permite apropiarse de una ficha vinculada a otra cuenta', async () => {
+  const service=loadService({getConnection:async()=>({beginTransaction:async()=>{},rollback:async()=>{},release(){},query:async sql=>sql.includes('FROM users')?[[{id:7}]]:sql.includes('WHERE user_id=')?[[]]:[[{id:9,activo:1,user_id:8}]]})})
+  await assert.rejects(service.linkPlayer(7,9), e=>e.status===409)
+})
+
 test('crea miembro con solo nombres, celular y contraseña sin cédula/correo', async () => {
   let insert
   const service = loadService({ async query(sql, params) {

@@ -268,7 +268,7 @@ export default function DirectorDashboard() {
       {/* Header Banner */}
       <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
         <div>
-          <div className='flex items-center gap-2'>
+          <div className='flex flex-wrap items-center gap-2'>
             <h1 className='text-2xl font-extrabold tracking-tight' style={{ color: 'var(--text-primary)' }}>
               Supervisión de partidos
             </h1>
@@ -284,7 +284,7 @@ export default function DirectorDashboard() {
           </p>
         </div>
 
-        <div className='flex items-center gap-2 shrink-0'>
+        <div className='flex flex-wrap items-center gap-2 min-w-0'>
           <button
             onClick={fetchMatches}
             disabled={loading}
@@ -293,6 +293,7 @@ export default function DirectorDashboard() {
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
             <span>Actualizar</span>
           </button>
+          <Link to='/director/agenda' className='btn-secondary px-4 py-2'>Agenda por cancha</Link>
           <Link
             to='/juez'
             className='btn-primary text-xs flex items-center gap-1.5 px-3.5 py-2'

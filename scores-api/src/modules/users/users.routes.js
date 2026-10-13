@@ -53,6 +53,10 @@ router.post(
   controller.create
 )
 router.get('/:id', requireAuth, requireAdmin, controller.getById)
+router.put('/:id/jugador', requireAuth, requireAdmin, async (req, res) => {
+  try { res.json({ ok: true, data: await require('./users.service').linkPlayer(req.params.id, req.body?.jugador_id) }) }
+  catch (e) { res.status(e.status || 500).json({ ok: false, message: e.status ? e.message : 'No se pudo vincular la ficha. Reintenta.' }) }
+})
 router.put('/:id', requireAuth, requireAdmin, controller.update)
 router.put('/:id/estado', requireAuth, requireAdmin, controller.setActive)
 router.put('/:id/password', requireAuth, requireAdmin, controller.resetPassword)

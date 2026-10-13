@@ -41,10 +41,6 @@ function Audit({ match, onClose }) {
   )
   return (
     <ActionDialog title={`Auditoría del partido #${match.id}`} onClose={onClose}>
-      <p className='text-sm'>
-        Registro de acciones confirmadas. Solo administradores y juez director pueden consultar esta
-        información.
-      </p>
       <label className='block text-sm'>
         Mostrar
         <select

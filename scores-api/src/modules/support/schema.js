@@ -1,4 +1,8 @@
 exports.ensureSupportSchema = async (db) => {
+  await db.query(`CREATE TABLE IF NOT EXISTS preferencias_avisos (
+    user_id INT PRIMARY KEY, cambios_partidos BOOLEAN NOT NULL DEFAULT TRUE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`)
   await db.query(`CREATE TABLE IF NOT EXISTS tickets_soporte (
     id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, partido_id INT NULL,
     request_id VARCHAR(64) NOT NULL, asunto VARCHAR(160) NOT NULL,

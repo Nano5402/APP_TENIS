@@ -7,10 +7,11 @@ import useUIStore from '../../store/useUIStore'
 import { getParticipantName } from '../../utils/matchParticipants'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
 
-export default function ModalAsignarCancha({ isOpen, onClose, match, onSuccess }) {
+export default function ModalAsignarCancha({ isOpen, onClose, match, onSuccess, allowUnassigned = true }) {
   const { addToast } = useUIStore()
   const [courts, setCourts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [courtsLoaded, setCourtsLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
   const initialCourtId = match?.cancha?.id ?? match?.cancha_id
   const [selectedCourtId, setSelectedCourtId] = useState(initialCourtId ? String(initialCourtId) : '')
@@ -34,13 +35,14 @@ export default function ModalAsignarCancha({ isOpen, onClose, match, onSuccess }
     setSearch('')
     setError('')
     setLoading(true)
+    setCourtsLoaded(false)
 
     sedeService.getAll()
       .then(async (res) => {
         const locations = res.data || []
         const courtResponses = await Promise.all(
           locations.map(async (location) => {
-            const courtRes = await sedeService.getCanchasBySede(location.id).catch(() => ({ data: [] }))
+            const courtRes = await sedeService.getCanchasBySede(location.id)
             return (courtRes.data || []).map((court) => ({
               ...court,
               sede_nombre: location.nombre,
@@ -54,6 +56,7 @@ export default function ModalAsignarCancha({ isOpen, onClose, match, onSuccess }
           (c) => c.deporte === matchDeporte || c.deporte === 'ambos'
         )
         setCourts(compatible.filter(c => c.activa !== false && c.activa !== 0))
+        setCourtsLoaded(true)
       })
       .catch((err) => {
         setError(err.message || 'No se pudieron cargar las canchas disponibles')
@@ -76,7 +79,7 @@ export default function ModalAsignarCancha({ isOpen, onClose, match, onSuccess }
 
   const handleSave = async (e) => {
     e?.preventDefault?.()
-    if (saving || loading) return
+    if (saving || loading || !courtsLoaded || (!allowUnassigned && !selectedCourtId)) return
     setSaving(true)
     setError('')
 
@@ -187,7 +190,7 @@ export default function ModalAsignarCancha({ isOpen, onClose, match, onSuccess }
           ) : (
             <>
               {/* Opción Sin Cancha */}
-              <button
+              {allowUnassigned && <button
                 type='button'
                 onClick={() => setSelectedCourtId('')}
                 className='w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between text-xs'
@@ -205,7 +208,7 @@ export default function ModalAsignarCancha({ isOpen, onClose, match, onSuccess }
                   </div>
                 </div>
                 {selectedCourtId === '' && <CheckCircle2 className='w-4 h-4 text-emerald-500 shrink-0' />}
-              </button>
+              </button>}
 
               {filteredCourts.map((court) => {
                 const isSelected = String(court.id) === String(selectedCourtId)
@@ -267,7 +270,7 @@ export default function ModalAsignarCancha({ isOpen, onClose, match, onSuccess }
             type='button'
             onClick={handleSave}
             className='btn-primary px-5 py-2 text-xs font-semibold'
-            disabled={saving || loading}
+            disabled={saving || loading || !courtsLoaded || (!allowUnassigned && !selectedCourtId)}
           >
             {saving ? 'Guardando…' : 'Confirmar cancha'}
           </button>

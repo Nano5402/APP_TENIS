@@ -10,6 +10,7 @@ import {
   MapPin,
   Tag,
   UserCog,
+  History,
   ArrowLeft,
   LogOut,
 } from 'lucide-react'
@@ -26,6 +27,8 @@ import TennisAtmosphere, {MotionToggle} from '../components/common/TennisAtmosph
 const NAV = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
   { to: '/admin/jugadores', icon: Users, label: 'Jugadores' },
+  { to: '/admin/caddies', icon: Users, label: 'Caddies' },
+  { to: '/admin/visitas', icon: History, label: 'Visitas' },
   { to: '/admin/equipos', icon: Swords, label: 'Parejas' },
   { to: '/admin/torneos', icon: Trophy, label: 'Torneos' },
   { to: '/admin/partidos', icon: CalendarDays, label: 'Partidos' },
@@ -34,6 +37,7 @@ const NAV = [
   { to: '/admin/sedes', icon: MapPin, label: 'Sedes' },
   { to: '/admin/categorias', icon: Tag, label: 'Categorías' },
   { to: '/admin/usuarios', icon: UserCog, label: 'Usuarios' },
+  { to: '/admin/auditoria', icon: History, label: 'Historial' },
 ]
 
 export default function AdminLayout() {
