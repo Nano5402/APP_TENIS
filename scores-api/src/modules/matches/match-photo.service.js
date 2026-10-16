@@ -163,7 +163,34 @@ function createPhotoService(db, directory = process.env.MATCH_PHOTOS_DIR) {
     }
     return null
   }
-  return { get, check, save, file, status, remove }
+  async function updateFraming(id, user, expected, rawEncuadre) {
+    if (user?.rol !== 'admin') throw fail(403, 'Solo los administradores pueden fijar el encuadre oficial de las fotografías')
+    if (typeof expected !== 'string' || !uuid.test(expected)) throw fail(400, 'Identificador de fotografía inválido')
+    const cleanEncuadre = framing(rawEncuadre)
+    const conn = await db.getConnection()
+    try {
+      await conn.beginTransaction()
+      const [matches] = await conn.query('SELECT id FROM partidos WHERE id = ? FOR UPDATE', [id])
+      if (!matches.length) throw fail(404, 'Partido no encontrado')
+      const [rows] = await conn.query('SELECT * FROM fotos_partido WHERE partido_id = ? FOR UPDATE', [id])
+      if (!rows[0]) throw fail(404, 'Este partido no tiene fotografía publicada')
+      if (rows[0].version !== expected) throw fail(409, 'La fotografía cambió. Recarga la foto antes de guardar el encuadre.')
+      await conn.query(
+        'UPDATE fotos_partido SET encuadre = ?, updated_at = CURRENT_TIMESTAMP WHERE partido_id = ? AND version = ?',
+        [JSON.stringify(cleanEncuadre), id, expected]
+      )
+      await conn.query(
+        'INSERT INTO auditoria_control_partido (partido_id, created_by, accion, detalle) VALUES (?, ?, ?, ?)',
+        [id, user.id, 'encuadre_foto', JSON.stringify({ version: expected, encuadre: cleanEncuadre })]
+      )
+      await conn.commit()
+    } catch (error) {
+      await conn.rollback().catch(() => {})
+      throw publicError(error)
+    } finally { conn.release() }
+    return get(id)
+  }
+  return { get, check, save, file, status, remove, updateFraming }
 }
 
 module.exports = { createPhotoService, authorize, validate, normalize, publicError, framing }

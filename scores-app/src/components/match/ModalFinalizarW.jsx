@@ -203,7 +203,7 @@ export default function ModalFinalizarW({ isOpen, onClose, match, onSuccess }) {
           </div>
           <button
             onClick={() => !saving && onClose()}
-            className='btn-ghost p-2 rounded-xl text-zinc-400 hover:text-white transition-colors ml-3 shrink-0'
+            className='btn-ghost p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors ml-3 shrink-0'
             aria-label='Cerrar'
             disabled={saving}
           >
@@ -334,7 +334,7 @@ export default function ModalFinalizarW({ isOpen, onClose, match, onSuccess }) {
                     className={`px-3 py-2 rounded-lg text-xs font-medium border text-left transition-all flex items-center justify-between ${
                       miembroRetirado === 'pareja_completa'
                         ? 'border-[var(--color-brand)] bg-[var(--color-brand-dim)] text-[var(--color-brand)]'
-                        : 'border-[var(--border-color)] text-[var(--text-muted)] hover:text-white'
+                        : 'border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                     }`}
                   >
                     <span>Toda la pareja</span>
@@ -347,7 +347,7 @@ export default function ModalFinalizarW({ isOpen, onClose, match, onSuccess }) {
                     className={`px-3 py-2 rounded-lg text-xs font-medium border text-left transition-all flex items-center justify-between ${
                       miembroRetirado === 'integrante_1'
                         ? 'border-[var(--color-brand)] bg-[var(--color-brand-dim)] text-[var(--color-brand)]'
-                        : 'border-[var(--border-color)] text-[var(--text-muted)] hover:text-white'
+                        : 'border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                     }`}
                   >
                     <span className='truncate'>{retirado === 'jugador1' ? t1Member1 : t2Member1}</span>
@@ -360,7 +360,7 @@ export default function ModalFinalizarW({ isOpen, onClose, match, onSuccess }) {
                     className={`px-3 py-2 rounded-lg text-xs font-medium border text-left transition-all flex items-center justify-between ${
                       miembroRetirado === 'integrante_2'
                         ? 'border-[var(--color-brand)] bg-[var(--color-brand-dim)] text-[var(--color-brand)]'
-                        : 'border-[var(--border-color)] text-[var(--text-muted)] hover:text-white'
+                        : 'border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                     }`}
                   >
                     <span className='truncate'>{retirado === 'jugador1' ? t1Member2 : t2Member2}</span>

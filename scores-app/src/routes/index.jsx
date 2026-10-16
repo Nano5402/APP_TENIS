@@ -44,6 +44,7 @@ const Favorites = lazy(() => import('../pages/Favorites'))
 const Profile = lazy(() => import('../pages/Profile'))
 const Settings = lazy(() => import('../pages/Settings'))
 const Sponsors = lazy(() => import('../pages/Sponsors'))
+const Reglamento = lazy(() => import('../pages/Reglamento'))
 const Pantalla = lazy(() => import('../pages/Pantalla'))
 const Ayuda = lazy(() => import('../pages/Ayuda'))
 const Support = lazy(() => import('../pages/Support'))
@@ -74,7 +75,7 @@ const JuezPartidos = lazy(() => import('../pages/judge/JuezPartidos'))
 export default function AppRouter() {
   const { user, isAuthenticated } = useAuthStore()
   const { pathname } = useLocation()
-  const personalView = ['/mi-actividad', '/profile', '/settings', '/favorites', '/tennis', '/live'].includes(pathname) || /^\/(match|torneo|player|team)\/\d+$/.test(pathname)
+  const personalView = ['/mi-actividad', '/profile', '/settings', '/favorites', '/tennis', '/live', '/reglamento', '/sponsors'].includes(pathname) || /^\/(match|torneo|player|team)\/\d+$/.test(pathname)
   // Personal views do not grant official or administrative capabilities.
   if (isAuthenticated && user?.rol === 'juez' && !personalView && !['/juez', '/juez/caddies', '/juez/perfil', '/ayuda', '/soporte'].includes(pathname)) {
     return <Navigate to={pathname === '/profile' ? '/juez/perfil' : '/juez'} replace />
@@ -112,6 +113,7 @@ export default function AppRouter() {
         <Route path='/anuncios' element={<Anuncios />} />
         <Route path='/tennis' element={<Tennis />} />
         <Route path='/torneo/:id' element={<TournamentDetail />} />
+        <Route path='/reglamento' element={<Reglamento />} />
         <Route path='/sponsors' element={<Sponsors />} />
         <Route path='/padel' element={<Padel />} />
         <Route path='/match/:id' element={<Match />} />

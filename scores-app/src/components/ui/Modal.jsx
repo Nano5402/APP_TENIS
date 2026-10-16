@@ -90,7 +90,7 @@ export default function Modal({
             type='button'
             onClick={onClose}
             disabled={busy}
-            className='btn-ghost p-2 rounded-xl text-zinc-400 hover:text-white transition-colors ml-3 shrink-0'
+            className='btn-ghost p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors ml-3 shrink-0'
             aria-label='Cerrar modal'
           >
             <X className='w-5 h-5' />

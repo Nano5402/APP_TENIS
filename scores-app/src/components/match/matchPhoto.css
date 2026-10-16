@@ -35,6 +35,12 @@
 .photocall-framing label { display: block; font-size: 12px; }
 .photocall-framing input { display: block; width: 100%; min-height: 44px; accent-color: #c6d97c; }
 .photocall-framing input:disabled { opacity: .4; }
+.photocall-framing-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.photocall-save-framing-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; font-size: 11px; font-weight: 700; color: #0b2419; padding: 6px 14px; border-radius: 10px; background: #c6d97c; border: 1px solid #d9ea97; transition: filter 150ms ease; }
+.photocall-save-framing-btn:hover:not(:disabled) { filter: brightness(1.06); }
+.photocall-save-framing-btn:disabled { opacity: .55; }
+.photocall-framing-ok { margin-top: 8px; margin-bottom: 0 !important; font-size: 11px !important; font-weight: 600; color: #c6d97c !important; }
+.photocall-framing-err { margin-top: 8px; margin-bottom: 0 !important; font-size: 11px !important; font-weight: 600; color: #fca5a5 !important; }
 .match-photocall-card button:focus-visible { outline: 2px solid #dfd974; outline-offset: 2px; }
 @container (min-width: 480px) { .photocall-sponsors { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 7px; } .photocall-logo { height: 46px; padding: 6px; } .photocall-score tbody th { font-size: 15px; } .photocall-score td { font-size: 24px; } }
 @container (max-width: 300px) { .photocall-logo { height: 34px; padding: 4px; } .photocall-score th:first-child { width: 44%; } .photocall-score td { font-size: 16px; } .match-photocall-title { font-size: 11px; } }

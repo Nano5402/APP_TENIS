@@ -11,6 +11,7 @@ import {
   Home,
   LogIn,
   Radio,
+  ScrollText,
   Settings,
   ShieldCheck,
   Star,
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Inicio', exact: true },
   { to: '/live', icon: Radio, label: 'En vivo', dot: true },
   { to: '/tennis', icon: Trophy, label: 'Tenis' },
+  { to: '/reglamento', icon: ScrollText, label: 'Reglamento' },
   { to: '/sponsors', icon: Handshake, label: 'Patrocinadores' },
   { to: '/anuncios', icon: Megaphone, label: 'Avisos' },
   { to: '/ayuda', icon: BookOpen, label: 'Ayuda' },
@@ -123,7 +125,7 @@ function NavigationLinks({ isAdmin, isOfficial }) {
   let items
   if (isJuez) {
     items = [
-      ...NAV_ITEMS.filter((item) => ['/sponsors', '/profile'].includes(item.to)),
+      ...NAV_ITEMS.filter((item) => ['/reglamento', '/sponsors', '/profile'].includes(item.to)),
       { to: '/ayuda', icon: BookOpen, label: 'Ayuda' },
       { to: '/juez', icon: Gavel, label: 'Juez' },
     ]

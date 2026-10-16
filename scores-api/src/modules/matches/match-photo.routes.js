@@ -51,6 +51,15 @@ router.put('/', requireAuth, requireOfficial, uploads, async (req, res, next) =>
     finally { activeUploads-- }
   })
 })
+router.patch('/encuadre', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const photo = await service.updateFraming(req.params.id, req.user, req.body?.expected, req.body?.encuadre)
+    realtime.publishMatchChange({ matchId: Number(req.params.id), action: 'photo' })
+    success(res, photo)
+  } catch (err) {
+    error(res, err.status ? err.message : 'No se pudo guardar el encuadre. Intenta nuevamente.', err.status || 500)
+  }
+})
 router.delete('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     await service.remove(req.params.id, req.user, req.body?.expected)

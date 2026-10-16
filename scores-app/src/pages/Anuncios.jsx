@@ -181,7 +181,7 @@ export default function Anuncios() {
             {query && (
               <button
                 onClick={() => setQuery('')}
-                className='absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-white p-0.5'
+                className='absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] p-0.5'
               >
                 <X className='w-3.5 h-3.5' />
               </button>

@@ -312,7 +312,7 @@ export default function GestionAnuncios() {
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className='absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-white p-0.5'
+                className='absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] p-0.5'
               >
                 <X className='w-3.5 h-3.5' />
               </button>
@@ -329,8 +329,8 @@ export default function GestionAnuncios() {
               onClick={() => setStatusTab(st.value)}
               className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
                 statusTab === st.value
-                  ? 'bg-[var(--color-brand)] text-black font-bold shadow-sm'
-                  : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-white'
+                  ? 'bg-[var(--color-brand)] text-white dark:text-[#123c2a] font-bold shadow-sm'
+                  : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
               {st.label}
@@ -387,7 +387,7 @@ export default function GestionAnuncios() {
             return (
               <div
                 key={a.id}
-                className='card p-4 transition-all border border-[var(--border-color)] hover:border-zinc-700'
+                className='card p-4 transition-all border border-[var(--border-color)] hover:border-[var(--border-hover)]'
               >
                 <div className='flex flex-col sm:flex-row items-start sm:items-center gap-4'>
                   {/* Thumbnail de Imagen */}
@@ -417,8 +417,8 @@ export default function GestionAnuncios() {
                       <span
                         className={`text-[11px] px-2 py-0.5 rounded-full font-semibold flex items-center gap-1 ${
                           isPublicado
-                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                            : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                            : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
                         }`}
                       >
                         {isPublicado ? (
@@ -449,7 +449,7 @@ export default function GestionAnuncios() {
 
                     {a.autor_nombre && (
                       <p className='text-[11px] text-[var(--text-muted)]'>
-                        Por: <span className='text-zinc-400 font-medium'>{a.autor_nombre}</span>
+                        Por: <span className='text-[var(--text-secondary)] font-medium'>{a.autor_nombre}</span>
                       </p>
                     )}
                   </div>
@@ -462,8 +462,8 @@ export default function GestionAnuncios() {
                       title={isPublicado ? 'Cambiar a borrador (ocultar de la app)' : 'Publicar anuncio ahora'}
                       className={`btn-ghost p-2 rounded-xl text-xs flex items-center gap-1.5 font-medium transition-colors ${
                         isPublicado
-                          ? 'text-zinc-400 hover:text-amber-400'
-                          : 'text-amber-400 hover:text-emerald-400'
+                          ? 'text-[var(--text-muted)] hover:text-amber-500'
+                          : 'text-amber-500 hover:text-emerald-500'
                       }`}
                     >
                       {isPublicado ? <EyeOff className='w-4 h-4' /> : <Eye className='w-4 h-4' />}
@@ -476,7 +476,7 @@ export default function GestionAnuncios() {
                     <button
                       onClick={() => openEdit(a)}
                       title='Editar publicación'
-                      className='btn-ghost p-2 rounded-xl text-zinc-300 hover:text-white'
+                      className='btn-ghost p-2 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                     >
                       <Pencil className='w-4 h-4' />
                     </button>

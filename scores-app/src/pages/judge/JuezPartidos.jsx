@@ -1028,7 +1028,7 @@ export default function JuezPartidos() {
                               e.stopPropagation()
                               setMatchToCourt(item)
                             }}
-                            className='btn-ghost text-[11px] px-2 py-0.5 rounded-md inline-flex items-center gap-1 text-zinc-300 hover:text-white hover:bg-[var(--bg-hover)]'
+                            className='btn-ghost text-[11px] px-2 py-0.5 rounded-md inline-flex items-center gap-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
                             title='Asignar o reasignar la cancha de este partido'
                           >
                             <MapPin size={11} className='text-emerald-400' />

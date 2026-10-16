@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
   --sidebar-width: 272px;
   --sidebar-collapsed-width: 88px;
   --header-height: 64px;
@@ -48,6 +49,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --color-brand: var(--club-green-light);
   --color-brand-rgb: 139, 203, 96;
   --color-brand-dim: #253f2d;
@@ -547,33 +549,64 @@
     color: var(--text-secondary);
   }
 
-  .form-input {
+  .form-input,
+  .input {
     @apply w-full text-sm;
     min-height: 50px;
-    background: var(--bg-input);
+    background-color: var(--bg-input);
     color: var(--text-primary);
-    border: 1px solid transparent;
+    border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     padding: 12px 16px;
     outline: none;
-    transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+    transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, color 160ms ease;
   }
 
-  .form-input::placeholder {
+  select.form-input,
+  select.input,
+  select {
+    color-scheme: light;
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+
+  .dark select.form-input,
+  .dark select.input,
+  .dark select {
+    color-scheme: dark;
+  }
+
+  select option,
+  select optgroup {
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+  }
+
+  select option:checked {
+    background-color: var(--color-brand-dim);
+    color: var(--color-brand);
+  }
+
+  .form-input::placeholder,
+  .input::placeholder {
     color: var(--text-muted);
   }
 
-  .form-input:hover {
+  .form-input:hover,
+  .input:hover {
     border-color: var(--border-hover);
   }
 
-  .form-input:focus {
-    background: var(--bg-card);
+  .form-input:focus,
+  .input:focus {
+    background-color: var(--bg-card);
     border-color: var(--color-brand);
     box-shadow: 0 0 0 4px rgba(var(--color-brand-rgb), 0.12);
   }
 
-  .form-input.error {
+  .form-input.error,
+  .input.error {
     border-color: var(--color-loss);
     box-shadow: 0 0 0 4px rgba(186, 26, 26, 0.09);
   }
