@@ -21,6 +21,7 @@ test('HTTP photo authorization, multipart, public image, replacement and forged 
       if (sql.includes('FROM users')) return [[{ rol: role, activo: true }]]
       if (sql.startsWith('DELETE FROM fotos_partido')) { row = null; return [{}] }
       if (sql.startsWith('INSERT INTO auditoria_control_partido')) { audits++; return [{}] }
+      if (sql.startsWith('UPDATE fotos_partido SET encuadre')) { row.encuadre = args[0]; return [{ affectedRows: 1 }] }
       if (sql.includes('FROM partidos')) return [Number(args[0]) === 30 ? [{ id: 30, juez_id: 12 }] : []]
       if (sql.includes('FROM fotos_partido')) return [row ? [{ ...row }] : []]
       if (sql.startsWith('INSERT')) { writes++; row = { partido_id: args[0], version: args[1], momento: args[2], created_by: args[3], encuadre: args[5], updated_at: 'now' }; return [{}] }
@@ -82,16 +83,41 @@ test('HTTP photo authorization, multipart, public image, replacement and forged 
       assert.equal(row.version, replacement)
     }
     role = 'admin'
+    const originalFrame = { zoom: 1, x: 50, y: 50 }
+    const savedFrame = { zoom: 1.35, x: 40, y: 60 }
+    const updateFrame = (body = {}, auth = true) => fetch(`${base}/encuadre`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(auth ? { Authorization: `Bearer ${token(12)}` } : {}) },
+      body: JSON.stringify({ expected: replacement, encuadre: savedFrame, expected_encuadre: originalFrame, ...body }),
+    })
+    assert.equal((await updateFrame({}, false)).status, 401)
+    for (const denied of ['juez', 'juez_director', 'miembro']) {
+      role = denied
+      assert.equal((await updateFrame()).status, 403)
+    }
+    role = 'admin'
+    assert.equal((await updateFrame({ encuadre: { zoom: 8, x: 50, y: 50 } })).status, 400)
+    assert.equal((await updateFrame({ expected_encuadre: undefined })).status, 400)
+    assert.equal((await updateFrame({ encuadre: null })).status, 400)
+    assert.equal((await updateFrame({ expected: version })).status, 409)
+    const originalBytes = await fs.readFile(path.join(directory, `${replacement}.webp`))
+    assert.equal((await updateFrame()).status, 200)
+    assert.deepEqual((await (await fetch(base)).json()).data.encuadre, savedFrame)
+    assert.equal(audits, 1)
+    assert.equal((await updateFrame()).status, 200)
+    assert.equal(audits, 1, 'Retry must not create duplicate audits')
+    assert.equal((await updateFrame({ encuadre: { zoom: 1.6, x: 60, y: 50 } })).status, 409)
+    assert.deepEqual(await fs.readFile(path.join(directory, `${replacement}.webp`)), originalBytes)
     assert.equal((await remove('../unsafe')).status, 400)
     assert.equal((await remove(version)).status, 409)
     assert.equal(row.version, replacement)
     assert.equal((await remove()).status, 200)
-    assert.equal(audits, 1)
+    assert.equal(audits, 2)
     assert.equal((await (await fetch(base)).json()).data, null)
     assert.equal((await fetch(`${base}/imagen?v=${replacement}`)).status, 404)
     assert.deepEqual(await fs.readdir(directory), [])
     assert.equal((await remove()).status, 200)
-    assert.equal(audits, 1)
+    assert.equal(audits, 2)
+    assert.equal((await updateFrame()).status, 404)
     assert.equal((await upload(12, randomUUID())).status, 200)
   } finally {
     server.closeAllConnections(); await new Promise(resolve => server.close(resolve))

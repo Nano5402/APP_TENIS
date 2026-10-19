@@ -11,6 +11,7 @@ const assert = require('node:assert/strict')
       const user = rol ? { id: 3, rol, nombre: 'QA', apellido: 'Prueba', email: 'qa@example.com', numero_documento: '12345678' } : null
       if (user) await page.addInitScript(user => localStorage.setItem('auth-storage-v2', JSON.stringify({ state: { isAuthenticated: true, user }, version: 0 })), user)
       let photo = { version: '11111111-1111-4111-8111-111111111111', momento: 'inicio' }, mode = 503, deletes = 0
+      let frameWrites = 0, frameFailure = true
       await page.route('**/*', route => {
         const req = route.request(), u = new URL(req.url()), ep = u.pathname.replace(/^\/api/, '')
         if (!u.pathname.startsWith('/api/')) return u.hostname === '127.0.0.1' ? route.continue() : route.abort()
@@ -26,6 +27,17 @@ const assert = require('node:assert/strict')
           }
           data = photo
         }
+        if (ep.endsWith('/foto/encuadre')) {
+          assert.equal(rol, 'admin')
+          assert.equal(req.method(), 'PATCH')
+          const body = req.postDataJSON()
+          assert.equal(body.expected, photo.version)
+          assert.deepEqual(body.expected_encuadre, photo.encuadre ?? null)
+          if (frameFailure) return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Error de encuadre simulado' }) })
+          photo.encuadre = body.encuadre
+          frameWrites++
+          data = photo
+        }
         if (ep.endsWith('/imagen')) return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="150"><rect width="100" height="150" fill="green"/></svg>' })
         if (ep.endsWith('/estado')) data = { configured: true, writable: true }
         if (ep.startsWith('/caddies/partidos/')) data = { can_assign: false, can_rate: false, valoraciones: [] }
@@ -35,7 +47,22 @@ const assert = require('node:assert/strict')
       const card = page.getByRole('region', { name: 'Foto del partido', exact: true })
       await card.waitFor()
       const remove = card.getByRole('button', { name: 'Eliminar foto', exact: true })
+      await card.locator('.photocall-photo-img').scrollIntoViewIfNeeded()
+      await card.locator('.photocall-photo-img').evaluate(img => img.decode())
+      await card.getByRole('button', { name: 'Ajustar encuadre' }).click()
+      const saveFrame = card.getByRole('button', { name: 'Guardar encuadre permanente' })
       if (rol === 'admin') {
+        await card.getByRole('slider', { name: 'Acercamiento', exact: true }).fill('1.5')
+        await saveFrame.click()
+        await card.getByText('Error de encuadre simulado', { exact: true }).waitFor()
+        assert.equal(await card.getByRole('slider', { name: 'Acercamiento', exact: true }).inputValue(), '1.5')
+        frameFailure = false
+        await saveFrame.click()
+        await card.getByText('Encuadre guardado para todos.', { exact: true }).waitFor()
+        await page.reload()
+        await card.waitFor()
+        assert.match(await card.locator('.photocall-photo-img').getAttribute('style'), /scale\(1.5\)/)
+        assert.equal(frameWrites, 1)
         await remove.click()
         await page.getByRole('dialog').getByRole('button', { name: 'Cancelar', exact: true }).click()
         assert.equal(deletes, 0)
@@ -49,7 +76,10 @@ const assert = require('node:assert/strict')
           } else await card.waitFor({ state: 'detached' })
         }
         assert.equal(deletes, 3)
-      } else assert.equal(await remove.count(), 0)
+      } else {
+        assert.equal(await remove.count(), 0)
+        assert.equal(await saveFrame.count(), 0)
+      }
       for (const width of [320, 390, 1440]) {
         await page.setViewportSize({ width, height: 900 })
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true)

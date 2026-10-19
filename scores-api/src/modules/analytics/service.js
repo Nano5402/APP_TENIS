@@ -1,7 +1,7 @@
 const { createHmac } = require('node:crypto')
 const fail = message => { throw { status: 400, message } }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-const paths = /^(\/|\/(live|tennis|padel|sponsors|anuncios|ayuda|pantalla)|\/(match|torneo|player|team)\/[1-9]\d{0,9})$/
+const paths = /^(\/|\/(live|tennis|padel|sponsors|anuncios|ayuda|reglamento|pantalla)|\/(match|torneo|player|team)\/[1-9]\d{0,9})$/
 const dayOf = date => new Date(date.getTime() - 5 * 3600000).toISOString().slice(0, 10)
 const shift = (day, days) => new Date(Date.parse(`${day}T12:00:00Z`) + days * 86400000).toISOString().slice(0, 10)
 function validate(body) {

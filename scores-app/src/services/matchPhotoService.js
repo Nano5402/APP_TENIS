@@ -3,7 +3,7 @@ import api from './api'
 export const photoUrl = (id, version, thumbnail = false) => `${api.defaults.baseURL.replace(/\/$/, '')}/partidos/${id}/foto/imagen?v=${encodeURIComponent(version)}${thumbnail ? '&miniatura=1' : ''}`
 export const getPhoto = id => api.get(`/partidos/${id}/foto`)
 export const removePhoto = (id, expected) => api.delete(`/partidos/${id}/foto`, { data: { expected }, suppressDeleteAlert: true })
-export const updatePhotoFraming = (id, expected, encuadre) => api.patch(`/partidos/${id}/foto/encuadre`, { expected, encuadre })
+export const updatePhotoFraming = (id, expected, encuadre, expected_encuadre) => api.patch(`/partidos/${id}/foto/encuadre`, { expected, encuadre, expected_encuadre })
 export const getPhotoStatus = id => api.get(`/partidos/${id}/foto/estado`)
 export const sendPhoto = (id, item, signal) => {
   const form = new FormData()

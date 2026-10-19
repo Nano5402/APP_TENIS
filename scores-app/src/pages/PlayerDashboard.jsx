@@ -15,6 +15,9 @@ export default function PlayerDashboard() {
   const user = useAuthStore(state => state.user)
   const [data, setData] = useState(null)
   const [activeTournaments, setActiveTournaments] = useState([])
+  const [tournamentsLoading, setTournamentsLoading] = useState(true)
+  const [tournamentsError, setTournamentsError] = useState('')
+  const tournamentRequest = useRef(0)
   const [groupsModalOpen, setGroupsModalOpen] = useState(false)
   const [groupsFilter, setGroupsFilter] = useState('')
   const [groupsCategoryFilter, setGroupsCategoryFilter] = useState('')
@@ -28,33 +31,36 @@ export default function PlayerDashboard() {
   const load = useCallback(async () => {
     const version = ++request.current
     try {
-      const [response, torneosRes] = await Promise.all([
-        matchService.getMyMatches(),
-        tournamentService.getAll({ deporte: 'tenis', archivo: 'activos' }).catch(() => ({ data: [] })),
-      ])
+      const response = await matchService.getMyMatches()
       if (version !== request.current) return
       setData(response.data)
-      setActiveTournaments(Array.isArray(torneosRes?.data) ? torneosRes.data : [])
       setError('')
       setUnlinked(false)
     } catch (err) {
       if (version !== request.current) return
       setUnlinked(err.status === 404)
       setError(err.status === 404 ? '' : 'No pudimos actualizar tu panel. Intenta nuevamente.')
-      if (err.status === 404) {
-        tournamentService
-          .getAll({ deporte: 'tenis', archivo: 'activos' })
-          .then(res => {
-            if (version === request.current) {
-              setActiveTournaments(Array.isArray(res?.data) ? res.data : [])
-            }
-          })
-          .catch(() => {})
-      }
+      if (err.status === 404) setData(null)
     } finally {
       if (version === request.current) setLoading(false)
     }
   }, [])
+  const loadTournaments = useCallback(async () => {
+    const version = ++tournamentRequest.current
+    setTournamentsLoading(true)
+    try {
+      const response = await tournamentService.getAll({ deporte: 'tenis', archivo: 'activos' })
+      if (!Array.isArray(response.data)) throw new Error('Invalid tournament response')
+      if (version !== tournamentRequest.current) return
+      setActiveTournaments(response.data)
+      setTournamentsError('')
+    } catch {
+      if (version === tournamentRequest.current) setTournamentsError('No pudimos actualizar los torneos.')
+    } finally {
+      if (version === tournamentRequest.current) setTournamentsLoading(false)
+    }
+  }, [])
+  useEffect(() => { loadTournaments(); return () => { tournamentRequest.current++ } }, [loadTournaments])
   useEffect(() => { load(); return () => { request.current++ } }, [load])
   // Agrupa ráfagas de puntos para no consultar todo el historial por cada acción.
   const refreshTimer = useRef(null)
@@ -69,7 +75,7 @@ export default function PlayerDashboard() {
   const history = data?.historial || []
   const upcoming = data?.proximos || []
   const live = data?.en_vivo || []
-  const all = [...live, ...upcoming, ...history]
+  const all = useMemo(() => [...(data?.en_vivo || []), ...(data?.proximos || []), ...(data?.historial || [])], [data])
   const tournaments = [...new Map(all.filter(m => m.torneo?.id).map(m => [String(m.torneo.id), m.torneo.nombre])).entries()]
 
   const myTournamentIds = useMemo(
@@ -87,9 +93,9 @@ export default function PlayerDashboard() {
         map.set(String(m.torneo.id), {
           id: m.torneo.id,
           nombre: m.torneo.nombre,
-          categoria: m.categoria ? { id: m.categoria.id, nombre: m.categoria.nombre } : null,
-          modalidad: m.modalidad || 'dobles',
-          estado: 'en_curso',
+          categoria: m.torneo.categoria || null,
+          modalidad: m.torneo.modalidad || m.modalidad || null,
+          estado: m.torneo.estado || null,
         })
       }
     }
@@ -147,7 +153,7 @@ export default function PlayerDashboard() {
       badge: selectableTournaments.length > 0 ? `${selectableTournaments.length} ${selectableTournaments.length === 1 ? 'torneo' : 'torneos'}` : null,
       desc:
         selectableTournaments.length > 1
-          ? `Hay ${selectableTournaments.length} torneos activos. Elige cuál categoría o torneo deseas revisar.`
+          ? `Elige entre ${selectableTournaments.length} torneos disponibles para consultar grupos y posiciones.`
           : selectableTournaments.length === 1
             ? `Consulta los grupos y tabla de posiciones de ${selectableTournaments[0].nombre}.`
             : 'Selecciona el torneo para revisar cómo van sus grupos y posiciones.',
@@ -293,6 +299,8 @@ export default function PlayerDashboard() {
         </div>
       }
     >
+      {tournamentsLoading && <p role='status'>Cargando torneos…</p>}
+      {tournamentsError && <p role='alert'>{tournamentsError} <button type='button' className='underline font-bold' disabled={tournamentsLoading} onClick={loadTournaments}>Reintentar torneos</button></p>}
       {selectableTournaments.length > 1 && (
         <div className='grid grid-cols-1 sm:grid-cols-2 gap-2.5'>
           <div className='relative'>
@@ -327,16 +335,16 @@ export default function PlayerDashboard() {
         </div>
       )}
 
-      {filteredModalTournaments.length === 0 ? (
+      {filteredModalTournaments.length === 0 ? (!tournamentsLoading && !tournamentsError && (
         <div className='card p-6 text-center space-y-2'>
           <p className='text-sm font-semibold' style={{ color: 'var(--text-primary)' }}>
-            No se encontraron torneos activos
+            No se encontraron torneos
           </p>
           <p className='text-xs' style={{ color: 'var(--text-muted)' }}>
             Puedes explorar el listado general de torneos del club.
           </p>
         </div>
-      ) : (
+      )) : (
         <div className='space-y-2.5'>
           {filteredModalTournaments.map((t) => {
             const isMine = myTournamentIds.has(String(t.id))
@@ -353,8 +361,8 @@ export default function PlayerDashboard() {
                 key={t.id}
                 className='rounded-xl border p-3.5 sm:p-4 transition-colors flex flex-col gap-3'
                 style={{
-                  backgroundColor: isMine ? 'var(--color-brand-dim)' : 'var(--bg-surface)',
-                  borderColor: isMine ? 'var(--border-brand)' : 'var(--border-color)',
+                  backgroundColor: isMine ? 'var(--color-brand-dim)' : 'var(--bg-card)',
+                  borderColor: isMine ? 'var(--color-brand)' : 'var(--border-color)',
                 }}
               >
                 <div className='flex items-start justify-between gap-2'>
@@ -378,7 +386,7 @@ export default function PlayerDashboard() {
                         </span>
                       )}
                       <span className='text-[11px] font-medium' style={{ color: 'var(--text-muted)' }}>
-                        {t.modalidad === 'dobles' ? 'Dobles' : 'Individual'} · {statusLabel}
+                        {t.modalidad === 'dobles' ? 'Dobles' : t.modalidad === 'individual' ? 'Individual' : 'Torneo'}{statusLabel ? ` · ${statusLabel}` : ''}
                       </span>
                     </div>
                     <h3 className='font-bold text-sm sm:text-base leading-snug' style={{ color: 'var(--text-primary)' }}>

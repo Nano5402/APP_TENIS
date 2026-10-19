@@ -74,7 +74,7 @@ export default function MatchPhoto({ matchId, match, dark = false }) {
   )
 
   const handleDownload = async () => {
-    if (!photo || downloading) return
+    if (!photo || downloading || savingFraming || deleting) return
     setDownloading(true)
     setDownloadError('')
     try {
@@ -109,10 +109,10 @@ export default function MatchPhoto({ matchId, match, dark = false }) {
         x: Math.round(Number(crop.x)),
         y: Math.round(Number(crop.y)),
       }
-      const response = await updatePhotoFraming(matchId, photo.version, payload)
+      const response = await updatePhotoFraming(matchId, photo.version, payload, photo.encuadre ?? null)
       setPhoto(response.data)
       setCrop(null)
-      setFramingNotice('Encuadre oficial guardado permanentemente para todos los usuarios.')
+      setFramingNotice('Encuadre guardado para todos.')
     } catch (error) {
       setFramingError(error.message || 'No se pudo guardar el encuadre. Intenta nuevamente.')
       if (error.status === 409) refresh()
@@ -122,7 +122,7 @@ export default function MatchPhoto({ matchId, match, dark = false }) {
   }
 
   const handleDelete = async () => {
-    if (!isAdmin || !photo || deleting || downloading) return
+    if (!isAdmin || !photo || deleting || downloading || savingFraming) return
     const version = photo.version
     setDeleting(true)
     setDeleteError('')
@@ -171,12 +171,12 @@ export default function MatchPhoto({ matchId, match, dark = false }) {
         {PHOTOCALL_SPONSORS.map(sponsor => <div className={`photocall-logo${sponsor.name === 'Metrollantas' ? ' photocall-logo-large' : ''}${sponsor.name === 'Supermercados Más x Menos' ? ' photocall-logo-mxm' : ''}`} key={sponsor.image} title={sponsor.name}><img src={sponsor.image} alt={sponsor.name} loading='eager' decoding='async' /></div>)}
       </div>
       <div className='photocall-actions'>
-        <button type='button' className='photocall-download-btn' disabled={downloading || failed} aria-expanded={framing} onClick={() => { setFraming(!framing); setExpanded(false); setFramingNotice(''); setFramingError('') }}><SlidersHorizontal size={14} /> Ajustar encuadre</button>
-        {framing && <fieldset className='photocall-framing' disabled={downloading || savingFraming}>
+        <button type='button' className='photocall-download-btn' disabled={downloading || failed || savingFraming || deleting} aria-expanded={framing} onClick={() => { setFraming(!framing); setExpanded(false); setFramingNotice(''); setFramingError('') }}><SlidersHorizontal size={14} /> Ajustar encuadre</button>
+        {framing && <fieldset className='photocall-framing' disabled={downloading || savingFraming || deleting}>
           <legend>Encuadra a los jugadores</legend>
           <p>
             {isAdmin
-              ? 'Acerca y desplaza la fotografía sin perder calidad. Puedes guardar este encuadre de forma permanente para que todos los visitantes vean la foto bien encuadrada.'
+              ? 'Ajusta la foto y guarda el encuadre para todos. La imagen original se conserva.'
               : 'Acerca y mueve la foto sin cortar cabezas ni pies. Este ajuste solo se aplica a tu descarga; no cambia la foto guardada.'}
           </p>
           {[['zoom', `Acercamiento (${Math.round(crop.zoom * 100)}%)`, 1, 2.5, .05], ['x', `Posición horizontal (${Math.round(crop.x)}%)`, 0, 100, 1], ['y', `Posición vertical (${Math.round(crop.y)}%)`, 0, 100, 1]].map(([key, label, min, max, step]) => (
@@ -184,6 +184,7 @@ export default function MatchPhoto({ matchId, match, dark = false }) {
               {label}
               <input
                 type='range'
+                aria-label={label.split(' (')[0]}
                 min={min}
                 max={max}
                 step={step}
@@ -212,8 +213,8 @@ export default function MatchPhoto({ matchId, match, dark = false }) {
           {framingNotice && <p role='status' className='photocall-framing-ok'>{framingNotice}</p>}
           {framingError && <p role='alert' className='photocall-framing-err'>{framingError}</p>}
         </fieldset>}
-        <button type='button' className='photocall-download-btn' disabled={downloading || deleting} onClick={handleDownload}><Download size={14} /> {downloading ? 'Preparando imagen…' : 'Descargar foto con marco'}</button>{downloadError && <p role='alert'>{downloadError}</p>}
-        {isAdmin && <button type='button' className='photocall-download-btn' disabled={deleting || downloading} onClick={handleDelete}><Trash2 size={14} /> {deleting ? 'Eliminando…' : 'Eliminar foto'}</button>}
+        <button type='button' className='photocall-download-btn' disabled={downloading || deleting || savingFraming} onClick={handleDownload}><Download size={14} /> {downloading ? 'Preparando imagen…' : 'Descargar foto con marco'}</button>{downloadError && <p role='alert'>{downloadError}</p>}
+        {isAdmin && <button type='button' className='photocall-download-btn' disabled={deleting || downloading || savingFraming} onClick={handleDelete}><Trash2 size={14} /> {deleting ? 'Eliminando…' : 'Eliminar foto'}</button>}
         {deleteError && <p role='alert'>{deleteError}</p>}
       </div>
     </section>

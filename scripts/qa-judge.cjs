@@ -483,7 +483,9 @@ async function checkTournamentRetirements(browser) {
       await page.waitForTimeout(280)
     }
     await page.goto('http://127.0.0.1:4173/sponsors')
-    await page.waitForURL('**/juez')
+    await page.getByRole('heading', { name: 'Marcas que juegan el torneo con nosotros.', exact: true }).waitFor()
+    assert.equal(new URL(page.url()).pathname, '/sponsors')
+    await page.goto('http://127.0.0.1:4173/juez')
     const statusFilters = page.getByRole('group', { name: 'Estado de los partidos' })
     await statusFilters.waitFor()
     for (const width of [320, 390, 768, 1440]) {

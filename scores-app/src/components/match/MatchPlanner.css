@@ -1,0 +1,297 @@
+.match-planner {
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  overflow: hidden;
+  min-width: 0;
+  background: var(--bg-card);
+  box-shadow: 0 8px 24px #143c2410;
+}
+.match-planner__header {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 20px;
+  background: linear-gradient(120deg, var(--color-brand-dim), transparent);
+}
+.match-planner__header h3 {
+  font-size: 20px;
+  font-weight: 750;
+  margin: 4px 0;
+}
+.match-planner__header p {
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 40ch;
+}
+.match-planner__eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  font-weight: 750;
+  color: var(--text-muted);
+}
+.match-planner__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 20px 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.match-planner__steps span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border-radius: 20px;
+  background: var(--bg-secondary);
+}
+.match-planner__steps .is-done {
+  background: var(--color-brand-dim);
+  color: var(--color-brand);
+}
+.match-planner__versus {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 0 16px 16px;
+}
+.match-planner__slot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 14px;
+  min-width: 0;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.match-planner__slot.is-active {
+  border-color: var(--color-brand);
+  background: var(--color-brand-dim);
+}
+.match-planner__slot strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.match-planner__slot small {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.match-planner__slot:disabled {
+  opacity: 0.6;
+}
+.match-planner__change {
+  font-size: 11px;
+  text-decoration: underline;
+}
+.match-planner__vs {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -70%);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  padding: 6px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.match-planner__body {
+  padding: 16px;
+  border-top: 1px solid var(--border-color);
+}
+.match-planner__search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px;
+}
+.match-planner__search:focus-within {
+  outline: 2px solid var(--color-brand);
+}
+.match-planner__search input {
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+}
+.match-planner__filters {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.match-planner__filters select {
+  min-width: 0;
+  flex: 1;
+  font-size: 12px;
+}
+.match-planner__results-title {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  padding: 14px 0;
+  color: var(--text-muted);
+}
+.match-planner__results-title label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.match-planner__results {
+  display: grid;
+  gap: 8px;
+  max-height: 330px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px;
+}
+.match-planner__result {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  min-width: 0;
+  background: var(--bg-card);
+}
+.match-planner__result:hover:not(:disabled) {
+  background: var(--color-brand-dim);
+  border-color: var(--color-brand);
+}
+.match-planner__result:disabled {
+  opacity: 0.6;
+}
+.match-planner__avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--color-brand-dim);
+  font-size: 12px;
+  font-weight: 700;
+}
+.match-planner__person {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  overflow-wrap: anywhere;
+}
+.match-planner__person strong {
+  font-size: 13px;
+}
+.match-planner__person small {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.match-planner__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+.match-planner__tags span {
+  font-size: 10px;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  padding: 3px 6px;
+}
+.match-planner__empty {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  flex-direction: column;
+  gap: 8px;
+  padding: 24px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.match-planner__ready {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--color-brand-dim);
+  font-size: 12px;
+}
+.match-planner__ready span {
+  flex: 1;
+  min-width: 120px;
+}
+.match-planner__ready small {
+  display: block;
+  margin-top: 4px;
+}
+.match-planner__ready button {
+  font-size: 12px;
+  padding: 8px;
+}
+.match-planner__warning {
+  display: flex;
+  gap: 8px;
+  margin: 12px 16px;
+  padding: 10px;
+  border: 1px solid #bd882d55;
+  border-radius: 10px;
+  font-size: 12px;
+}
+.match-planner__warning svg {
+  flex-shrink: 0;
+}
+.match-planner__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color);
+}
+.match-planner__footer button {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  text-align: left;
+  min-height: 32px;
+}
+.match-planner button:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+@media (max-width: 400px) {
+  .match-planner__header {
+    padding: 14px;
+  }
+  .match-planner__body {
+    padding: 12px;
+  }
+  .match-planner__slot {
+    padding: 10px;
+  }
+  .match-planner__slot strong {
+    font-size: 12px;
+  }
+  .match-planner__filters {
+    flex-direction: column;
+  }
+  .match-planner__avatar {
+    display: none;
+  }
+}

@@ -53,7 +53,7 @@ router.put('/', requireAuth, requireOfficial, uploads, async (req, res, next) =>
 })
 router.patch('/encuadre', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const photo = await service.updateFraming(req.params.id, req.user, req.body?.expected, req.body?.encuadre)
+    const photo = await service.updateFraming(req.params.id, req.user, req.body?.expected, req.body?.encuadre, req.body?.expected_encuadre)
     realtime.publishMatchChange({ matchId: Number(req.params.id), action: 'photo' })
     success(res, photo)
   } catch (err) {

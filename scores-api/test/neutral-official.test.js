@@ -15,3 +15,25 @@ test('permite continuar la autorización normal cuando el oficial no participa',
 test('un fallo de consulta no concede acceso a la marcación', async () => {
   await assert.rejects(assertNeutral({query: async () => {throw Error('offline')}}, 10, 3), /offline/)
 })
+
+test('guard valida ambos nombres de parámetro y rechaza partidos propios', async () => {
+  const dbPath = require.resolve('../src/config/db')
+  const previous = require.cache[dbPath]
+  let consulted = null
+  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { query: async (_sql, args) => { consulted = args; return [[{ id: 8 }]] } } }
+  try {
+    const { guard } = require('../src/modules/matches/neutral-official')
+    for (const params of [{ id: '10' }, { matchId: '10' }]) {
+      let status, next = false
+      await guard({ params, user: { id: 3 } }, { status(code) { status = code; return this }, json() {} }, () => { next = true })
+      assert.deepEqual(consulted, ['10', 3])
+      assert.equal(status, 403)
+      assert.equal(next, false)
+    }
+    consulted = null
+    let status
+    await guard({ params: {}, user: { id: 3 } }, { status(code) { status = code; return this }, json() {} }, () => assert.fail('Invalid ID allowed'))
+    assert.equal(status, 400)
+    assert.equal(consulted, null)
+  } finally { if (previous) require.cache[dbPath] = previous; else delete require.cache[dbPath] }
+})

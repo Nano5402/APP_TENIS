@@ -163,10 +163,12 @@ function createPhotoService(db, directory = process.env.MATCH_PHOTOS_DIR) {
     }
     return null
   }
-  async function updateFraming(id, user, expected, rawEncuadre) {
+  async function updateFraming(id, user, expected, rawEncuadre, expectedFraming) {
     if (user?.rol !== 'admin') throw fail(403, 'Solo los administradores pueden fijar el encuadre oficial de las fotografías')
     if (typeof expected !== 'string' || !uuid.test(expected)) throw fail(400, 'Identificador de fotografía inválido')
+    if (!rawEncuadre || expectedFraming === undefined) throw fail(400, 'Envía el encuadre y su valor anterior')
     const cleanEncuadre = framing(rawEncuadre)
+    const previousFraming = framing(expectedFraming)
     const conn = await db.getConnection()
     try {
       await conn.beginTransaction()
@@ -175,6 +177,13 @@ function createPhotoService(db, directory = process.env.MATCH_PHOTOS_DIR) {
       const [rows] = await conn.query('SELECT * FROM fotos_partido WHERE partido_id = ? FOR UPDATE', [id])
       if (!rows[0]) throw fail(404, 'Este partido no tiene fotografía publicada')
       if (rows[0].version !== expected) throw fail(409, 'La fotografía cambió. Recarga la foto antes de guardar el encuadre.')
+      const currentFraming = framing(rows[0].encuadre)
+      // Replays after a lost response are safe and do not duplicate the audit.
+      if (JSON.stringify(currentFraming) === JSON.stringify(cleanEncuadre)) {
+        await conn.commit()
+        return metadata(rows[0])
+      }
+      if (JSON.stringify(currentFraming) !== JSON.stringify(previousFraming)) throw fail(409, 'Otro administrador cambió el encuadre. Revisa el actual antes de guardar.')
       await conn.query(
         'UPDATE fotos_partido SET encuadre = ?, updated_at = CURRENT_TIMESTAMP WHERE partido_id = ? AND version = ?',
         [JSON.stringify(cleanEncuadre), id, expected]

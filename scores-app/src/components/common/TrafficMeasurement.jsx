@@ -4,7 +4,7 @@ import useAuthStore from '../../store/useAuthStore'
 import { resolveApiUrl } from '../../services/api'
 
 const preferenceKey = 'traffic-preference-v1', identityKey = 'traffic-identity-v1', sessionKey = 'traffic-session-v1'
-const allowed = /^(\/|\/(live|tennis|padel|sponsors|anuncios|ayuda|pantalla)|\/(match|torneo|player|team)\/[1-9]\d{0,9})$/
+const allowed = /^(\/|\/(live|tennis|padel|sponsors|anuncios|ayuda|reglamento|pantalla)|\/(match|torneo|player|team)\/[1-9]\d{0,9})$/
 const duration = 180 * 86400000
 function preference() {
   try { const p = JSON.parse(localStorage.getItem(preferenceKey)); return p?.accept !== false } catch { return false }
