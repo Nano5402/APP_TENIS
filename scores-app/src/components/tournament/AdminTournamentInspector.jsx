@@ -26,6 +26,7 @@ import TournamentStandings from './TournamentStandings'
 import TournamentMatches from './TournamentMatches'
 import TournamentRetirements from './TournamentRetirements'
 import TournamentTeamsModal from './TournamentTeamsModal'
+import { TournamentBracketSkeleton } from '../ui/Skeleton'
 
 const INSPECTOR_TABS = [
   { id: 'bracket', label: 'Eliminatorias (Brackets)', icon: GitBranch },
@@ -518,14 +519,19 @@ export default function AdminTournamentInspector({
         </div>
       )}
 
-      {busy && (
-        <p role='status' className='text-xs text-[var(--text-muted)] py-2'>
-          Actualizando información del torneo…
-        </p>
+      {busy && matches.length > 0 && (
+        <div className='flex items-center justify-between px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-[var(--color-brand)] font-semibold animate-pulse'>
+          <span className='inline-flex items-center gap-2'>
+            <RefreshCw className='w-3 h-3 animate-spin' /> Sincronizando datos del torneo…
+          </span>
+        </div>
       )}
 
       {/* SECCIÓN 1: ELIMINATORIAS / BRACKETS */}
-      {section === 'bracket' && (
+      {section === 'bracket' && busy && matches.length === 0 && (
+        <TournamentBracketSkeleton />
+      )}
+      {section === 'bracket' && matches.length > 0 && (
         <div className='space-y-4'>
           <TournamentBracket
             key={`admin-inspector-bracket-${tournament.id}`}

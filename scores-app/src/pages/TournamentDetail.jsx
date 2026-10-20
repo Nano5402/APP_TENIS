@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Plus, Trophy } from 'lucide-react'
+import { ArrowLeft, Plus, RefreshCw, Trophy } from 'lucide-react'
 import { tournamentService } from '../services/tournamentService'
 import { matchService } from '../services/matchService'
 import useAuthStore from '../store/useAuthStore'
@@ -12,6 +12,7 @@ import TournamentMatches from '../components/tournament/TournamentMatches'
 import TournamentBracket from '../components/tournament/TournamentBracket'
 import TournamentRetirements from '../components/tournament/TournamentRetirements'
 import { confirm } from '../utils/confirm'
+import { TournamentBracketSkeleton, TournamentHeaderSkeleton, MatchCardSkeleton } from '../components/ui/Skeleton'
 export default function TournamentDetail() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -135,8 +136,15 @@ export default function TournamentDetail() {
         >
           <ArrowLeft className='w-4 h-4' /> Volver a {t?.deporte === 'padel' ? 'pádel' : 'tenis'}
         </button>
-        <button className='btn-ghost text-sm' disabled={busy} onClick={refresh}>
-          Actualizar
+        <button
+          type='button'
+          className='btn-ghost text-xs sm:text-sm inline-flex items-center gap-1.5 transition-colors'
+          disabled={busy}
+          onClick={refresh}
+          title='Actualizar información y partidos en vivo'
+        >
+          <RefreshCw className={`w-3.5 h-3.5 text-[var(--color-brand)] ${busy ? 'animate-spin' : ''}`} />
+          <span>{busy ? 'Sincronizando…' : 'Actualizar'}</span>
         </button>
       </div>
       {error && (
@@ -144,6 +152,7 @@ export default function TournamentDetail() {
           {error}
         </p>
       )}
+      {!t && busy && <TournamentHeaderSkeleton />}
       {t && (
         <>
           <header className='card p-5 space-y-3'>
@@ -223,10 +232,21 @@ export default function TournamentDetail() {
           </div>
         </>
       )}
-      {busy && !data && (
-        <p role='status' className='text-sm'>
-          Actualizando…
-        </p>
+      {busy && data && (
+        <div className='flex items-center justify-between px-3.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-[var(--color-brand)] font-semibold animate-pulse'>
+          <span className='inline-flex items-center gap-2'>
+            <span className='w-2 h-2 rounded-full bg-[var(--color-brand)] animate-ping' />
+            Sincronizando datos del torneo y marcadores en vivo…
+          </span>
+          <span className='text-[10px] opacity-75 hidden sm:inline'>Tiempo real</span>
+        </div>
+      )}
+      {(!data || (busy && !data)) && tab === 'matches' && (
+        <div className='space-y-4'>
+          {[1, 2, 3].map((k) => (
+            <MatchCardSkeleton key={k} />
+          ))}
+        </div>
       )}
       {Array.isArray(data) && tab === 'matches' && (
         <div className='space-y-4'>
@@ -275,6 +295,9 @@ export default function TournamentDetail() {
       )}
       {data && !Array.isArray(data) && tab === 'standings' && (
         <TournamentStandings data={data} retirements={retirements} />
+      )}
+      {(!data || (busy && !data)) && tab === 'bracket' && (
+        <TournamentBracketSkeleton />
       )}
       {!error && Array.isArray(data) && tab === 'bracket' && (
         <div className='space-y-4'>
