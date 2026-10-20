@@ -556,7 +556,7 @@ reason = 'Esta categoría aún continúa en fase de grupos'
           {n === 1
             ? 'PRIMERA PAREJA'
             : isAutoLockedOpponent
-              ? `🏆 RIVAL EN BRACKET (${firstBracketMatchup.ronda})`
+              ? `RIVAL EN BRACKET (${firstBracketMatchup.ronda})`
               : 'RIVAL'}
         </span>
         <span className='match-planner__pair-avatars' aria-hidden='true'>
@@ -668,7 +668,7 @@ reason = 'Esta categoría aún continúa en fase de grupos'
                           : 'bg-emerald-500/15 text-[var(--color-brand)]'
                       }`}
                     >
-                      🏆 En Eliminatoria ({meta.elimCount} llaves)
+                      En Eliminatoria ({meta.elimCount} llaves)
                     </span>
                   ) : (
                     <span className='text-[10px] opacity-75'>En Grupos</span>
@@ -1143,7 +1143,7 @@ disabled={busy}
                     const meta = bracketMetaByCategory.get(String(id))
                     return (
                       <option key={id} value={id}>
-                        {name} {meta?.hasBracket ? '· 🏆 En Eliminatoria' : '· En Grupos'}
+                        {name} {meta?.hasBracket ? '· En Eliminatoria' : '· En Grupos'}
                       </option>
                     )
                   })}
@@ -1236,7 +1236,7 @@ disabled={busy}
                                     fontWeight: 800,
                                   }}
                                 >
-                                  🏆 {bracketInfo.ronda}: vs {bracketInfo.opponentName}
+                                  {bracketInfo.ronda}: vs {bracketInfo.opponentName}
                                 </span>
                               ) : bracketInfo.inBracket ? (
                                 <span className='opacity-75'>

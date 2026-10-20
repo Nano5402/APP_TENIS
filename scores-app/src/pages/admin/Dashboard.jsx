@@ -188,7 +188,7 @@ export default function Dashboard() {
                   </div>
                   <div className='text-right shrink-0'>
                     <p className='text-xs font-semibold' style={{ color: 'var(--color-brand)' }}>
-                      🏆 {ganadorNombre}
+                      <Trophy className='w-3 h-3 inline-block mr-1 text-amber-500' /> {ganadorNombre}
                     </p>
                     {m.fecha_inicio && (
                       <p className='text-[10px]' style={{ color: 'var(--text-muted)' }}>

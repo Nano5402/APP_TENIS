@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Trophy } from 'lucide-react'
 import { tournamentService } from '../../services/tournamentService'
 import { formatDate } from '../../utils/formatDate'
 export default function TournamentDirectory() {
@@ -65,9 +66,9 @@ export default function TournamentDirectory() {
           <div className='flex flex-wrap items-center gap-2 pt-3 border-t border-[var(--border-color)]'>
             <Link
               to={`/torneo/${t.id}?tab=bracket`}
-              className='btn-primary px-3 py-1.5 text-xs font-bold'
+              className='btn-primary px-3 py-1.5 text-xs font-bold inline-flex items-center gap-1.5'
             >
-              🏆 Eliminatorias (Brackets)
+              <Trophy className='w-3.5 h-3.5' /> Eliminatorias (Brackets)
             </Link>
             <Link
               to={`/torneo/${t.id}?tab=standings`}

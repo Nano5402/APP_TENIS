@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Plus } from 'lucide-react'
+import { ArrowLeft, Plus, Trophy } from 'lucide-react'
 import { tournamentService } from '../services/tournamentService'
 import { matchService } from '../services/matchService'
 import useAuthStore from '../store/useAuthStore'
@@ -189,8 +189,11 @@ export default function TournamentDetail() {
             ].map(([v, l]) => (
               <button
                 key={v}
+                type='button'
                 className={
-                  tab === v ? 'btn-primary px-3 py-2 text-sm' : 'btn-secondary px-3 py-2 text-sm'
+                  tab === v
+                    ? 'btn-primary px-3 py-2 text-sm inline-flex items-center gap-1.5'
+                    : 'btn-secondary px-3 py-2 text-sm inline-flex items-center gap-1.5'
                 }
                 aria-pressed={tab === v}
                 onClick={async () => {
@@ -204,18 +207,23 @@ export default function TournamentDetail() {
                   )
                     return
                   setRosterDirty(false)
+                  const targetNeedsMatches = v === 'matches' || v === 'bracket'
+                  const currentHasMatches = tab === 'matches' || tab === 'bracket'
+                  if (!targetNeedsMatches || !currentHasMatches) {
+                    setData(null)
+                  }
                   setTab(v)
                   setSearchParams({ tab: v }, { replace: true })
-                  setData(null)
                 }}
               >
+                {v === 'bracket' && <Trophy className='w-4 h-4' />}
                 {l}
               </button>
             ))}
           </div>
         </>
       )}
-      {busy && (
+      {busy && !data && (
         <p role='status' className='text-sm'>
           Actualizando…
         </p>
@@ -268,7 +276,7 @@ export default function TournamentDetail() {
       {data && !Array.isArray(data) && tab === 'standings' && (
         <TournamentStandings data={data} retirements={retirements} />
       )}
-      {!busy && !error && Array.isArray(data) && tab === 'bracket' && (
+      {!error && Array.isArray(data) && tab === 'bracket' && (
         <div className='space-y-4'>
           {admin && (
             <div className='flex flex-wrap items-center justify-between gap-3 p-3.5 card border border-emerald-500/30 bg-emerald-500/5'>

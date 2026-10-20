@@ -26,7 +26,7 @@ const poll = async () => {
     const response = await api.get('/partidos/live-version')
     const next = response.data?.version ?? response.version
     if (current !== generation || next === undefined) return
-    if (version !== next) notify({ action: 'updated', matchId: null })
+    if (version !== null && version !== next) notify({ action: 'updated', matchId: null })
     version = next
   } catch { /* The next interval retries without interrupting scoring. */ }
   finally { if (current === generation) pending = false }

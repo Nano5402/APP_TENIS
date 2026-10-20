@@ -1495,7 +1495,7 @@ const tmpMode = payload.participante1_tipo
                             <div className='inline-flex rounded-xl p-0.5 bg-[var(--bg-card)] border border-[var(--border-color)]'>
                               {[
                                 ['grupos', 'Fase de grupos'],
-                                ['eliminacion', '🏆 Fase eliminatoria (Brackets)'],
+                                ['eliminacion', 'Fase eliminatoria (Brackets)'],
                               ].map(([pVal, pLabel]) => (
                                 <button
                                   key={pVal}
@@ -1593,7 +1593,7 @@ const tmpMode = payload.participante1_tipo
                                       >
                                         <span>{cat.nombre}</span>
                                         <span className='opacity-75 text-[10px]'>
-                                          ({elimCount > 0 ? `🏆 ${elimCount} llaves` : 'En Grupos'})
+                                          ({elimCount > 0 ? `${elimCount} llaves` : 'En Grupos'})
                                         </span>
                                       </button>
                                     )

@@ -304,7 +304,7 @@ export default function AdminTournamentInspector({
           {stats.bracketCategories.length > 0 && (
             <div className='flex flex-wrap items-center gap-1.5 pt-1'>
               <span className='text-xs font-bold text-[var(--color-brand)]'>
-                🏆 Cuadros creados:
+                <Trophy className='w-3.5 h-3.5 inline-block mr-1 text-[var(--color-brand)]' /> Cuadros creados:
               </span>
               {stats.bracketCategories.map((c) => (
                 <button
@@ -382,7 +382,7 @@ export default function AdminTournamentInspector({
           }`}
         >
           <p className='text-[11px] font-bold uppercase tracking-wider text-[var(--color-brand)]'>
-            🏆 Brackets
+            <Trophy className='w-3 h-3 inline-block mr-1 text-[var(--color-brand)]' /> Brackets
           </p>
           <p className='text-lg font-black text-[var(--text-primary)] mt-0.5'>
             {stats.elimCount} llaves
@@ -611,7 +611,7 @@ export default function AdminTournamentInspector({
                   Solo inscritas en este torneo ({detailedPairs.filter((p) => p.isEnrolled).length})
                 </option>
                 <option value='eliminatoria'>
-                  🏆 En Fase Eliminatoria / Brackets ({detailedPairs.filter((p) => p.inBracket).length})
+                  En Fase Eliminatoria / Brackets ({detailedPairs.filter((p) => p.inBracket).length})
                 </option>
                 <option value='grupos'>
                   En Fase de Grupos ({detailedPairs.filter((p) => p.isEnrolled && !p.inBracket).length})
@@ -648,7 +648,7 @@ export default function AdminTournamentInspector({
                         )}
                         {pair.inBracket && (
                           <span className='px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/15 text-amber-500 border border-amber-500/30'>
-                            🏆 {pair.bracketInfo?.ronda}
+                            <Trophy className='w-3 h-3 inline-block mr-1' /> {pair.bracketInfo?.ronda}
                           </span>
                         )}
                       </div>

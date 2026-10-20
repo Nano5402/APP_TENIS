@@ -546,7 +546,7 @@ export async function generateBracketPngBlob({
 
     ctx.fillStyle = palette.champLabel
     ctx.font = '800 11px "Plus Jakarta Sans", "Segoe UI", sans-serif'
-    ctx.fillText('🏆 CAMPEÓN DE LA CATEGORÍA', badgeX + 18, badgeY + 29)
+    ctx.fillText('CAMPEÓN DE LA CATEGORÍA', badgeX + 18, badgeY + 29)
 
     ctx.fillStyle = palette.champName
     ctx.font = '900 17px "Plus Jakarta Sans", "Segoe UI", sans-serif'
@@ -596,7 +596,7 @@ export async function generateBracketPngBlob({
 
     ctx.fillStyle = isFinal ? palette.finalHeaderText : palette.roundHeaderText
     ctx.font = '800 12.5px "Plus Jakarta Sans", "Segoe UI", sans-serif'
-    const headerTitle = isFinal ? `🏆 ${round.label.toUpperCase()}` : round.label.toUpperCase()
+    const headerTitle = round.label.toUpperCase()
     ctx.fillText(headerTitle, colX + 14, roundHeadersY + 21)
 
     // Contador de llaves a la derecha del encabezado de columna

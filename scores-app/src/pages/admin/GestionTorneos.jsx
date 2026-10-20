@@ -634,8 +634,8 @@ export default function GestionTorneos() {
                           : 'bg-emerald-500/10 text-[var(--color-brand)] border-emerald-500/30 hover:bg-emerald-500/20'
                       }`}
                     >
-                      <GitBranch className='w-3.5 h-3.5' />
-                      <span>🏆 Eliminatorias / Brackets</span>
+                      <Trophy className='w-3.5 h-3.5' />
+                      <span>Eliminatorias / Brackets</span>
                     </button>
 
                     {tournament.modalidad === 'dobles' && (

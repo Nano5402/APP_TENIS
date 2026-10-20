@@ -1351,7 +1351,7 @@ export default function TournamentBracket({
                   >
                     <span>{name}</span>
                     <span className='ucl-cat-pill-badge'>
-                      {count > 0 ? `🏆 ${count}` : management ? 'En grupos · Armar' : 'En grupos'}
+                      {count > 0 ? <span className='inline-flex items-center gap-1 font-semibold text-[var(--color-brand)]'><Trophy className='w-3.5 h-3.5' /> {count}</span> : management ? 'En grupos · Armar' : 'En grupos'}
                     </span>
                   </button>
                 )
@@ -1499,7 +1499,7 @@ export default function TournamentBracket({
             {categoriesWithBrackets.length > 0 && (
               <div className='max-w-xl mx-auto rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-3.5 space-y-2'>
                 <p className='text-xs font-extrabold uppercase tracking-wider text-[var(--color-brand)]'>
-                  🏆 Cuadros eliminatorios ya creados en este torneo:
+                  <span className='inline-flex items-center gap-1.5'><Trophy className='w-4 h-4 text-[var(--color-brand)]' /> Cuadros eliminatorios ya creados en este torneo:</span>
                 </p>
                 <div className='flex flex-wrap items-center justify-center gap-2'>
                   {categoriesWithBrackets.map(([catId, catName]) => (
@@ -1641,6 +1641,7 @@ export default function TournamentBracket({
               <div className='p-3 space-y-3 lg:hidden'>
                 <div className='flex items-center gap-2'>
                   <button
+                    type='button'
                     aria-label='Ronda anterior'
                     className='btn-secondary p-2.5'
                     disabled={current === 0}
@@ -1664,6 +1665,7 @@ export default function TournamentBracket({
                     </select>
                   </label>
                   <button
+                    type='button'
                     aria-label='Ronda siguiente'
                     className='btn-secondary p-2.5'
                     disabled={current === rounds.length - 1}
@@ -1831,7 +1833,7 @@ export default function TournamentBracket({
                                     : 'bg-[var(--bg-card)] text-[var(--text-muted)]'
                                 }`}
                               >
-                                {count > 0 ? `🏆 ${count} llaves` : 'Por armar'}
+                                {count > 0 ? <span className='inline-flex items-center gap-1 text-[var(--color-brand)] font-semibold'><Trophy className='w-3 h-3' /> {count} llaves</span> : 'Por armar'}
                               </span>
                             </button>
                           )
