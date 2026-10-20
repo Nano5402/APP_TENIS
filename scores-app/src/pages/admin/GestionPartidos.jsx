@@ -12,12 +12,21 @@ import {
   MapPin,
   Search,
   Trophy,
+  GitBranch,
+  Sparkles,
 } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { matchService } from '../../services/matchService'
 import MatchAuditButton from '../../components/match/MatchAuditButton'
 import MatchPlanner from '../../components/match/MatchPlanner'
 import MatchWizardSummary from '../../components/match/MatchWizardSummary'
+import TournamentBracket from '../../components/tournament/TournamentBracket'
+import {
+  findBracketMatchupForTeam,
+  getCategoryBracketMatches,
+  resolveEffectiveParticipant,
+  roundInfo,
+} from '../../utils/tournamentBracket'
 import { playerService } from '../../services/playerService'
 import { teamService } from '../../services/teamService'
 import { userService } from '../../services/userService'
@@ -81,6 +90,7 @@ export default function GestionPartidos() {
   const [wizardStep, setWizardStep] = useState(0)
   const [showMarcador, setShowMarcador] = useState(null)
   const [editing, setEditing] = useState(null)
+  const [linkedBracketMatchId, setLinkedBracketMatchId] = useState(null)
   const [submitError, setSubmitError] = useState('')
   const [registrationRetry, setRegistrationRetry] = useState(0)
   const [filterTab, setFilterTab] = useState('todos')
@@ -89,6 +99,14 @@ export default function GestionPartidos() {
   const [filterDeporte, setFilterDeporte] = useState('todos')
   const [search, setSearch] = useState('')
   const [setNumbers, setSetNumbers] = useState([1, 2, 3])
+  const [showBracketsView, setShowBracketsView] = useState(
+    () => searchParams.get('brackets') === '1'
+  )
+  const [autoOpenBracketBuilder, setAutoOpenBracketBuilder] = useState(
+    () => searchParams.get('armar') === '1'
+  )
+  const [bracketTorneoId, setBracketTorneoId] = useState('')
+  const [tournamentStandings, setTournamentStandings] = useState(null)
   const { addToast } = useUIStore()
 
   const {
@@ -204,7 +222,16 @@ export default function GestionPartidos() {
     let active = true
     setRegistrations(null)
     setRegistrationError('')
-    if (showForm && !editing && selectedTournamentId && selectedModality === 'dobles') {
+    setTournamentStandings(null)
+    if (showForm && selectedTournamentId) {
+      tournamentService
+        .getStandings(selectedTournamentId, true)
+        .then((r) => {
+          if (active && r?.data) setTournamentStandings(r.data)
+        })
+        .catch(() => {})
+    }
+    if (showForm && selectedTournamentId && selectedModality === 'dobles') {
       tournamentService
         .getInscripciones(selectedTournamentId)
         .then((r) => {
@@ -241,7 +268,21 @@ export default function GestionPartidos() {
           ).map((assignment) => ({ ...pair, ...assignment }))
         })
       : []
-  const chooseQuickPair = (pair) => {
+
+  const applyMatchScoringToForm = (matchObj) => {
+    const fmt = matchObj?.formato || matchObj || {}
+    setValue('mejor_de_sets', String(fmt.mejor_de_sets || 3))
+    setValue('juegos_por_set', String(fmt.juegos_por_set || 6))
+    setValue('diferencia_juegos', String(fmt.diferencia_juegos || 2))
+    setValue('modo_game', fmt.modo_game || 'ventaja')
+    setValue('set_decisivo', fmt.set_decisivo || 'set_completo')
+    setValue('tiebreak_en', String(fmt.tiebreak_en ?? 6))
+    setValue('tiebreak_puntos', String(fmt.tiebreak_puntos || 7))
+    setValue('match_tiebreak_puntos', String(fmt.match_tiebreak_puntos || 10))
+    setValue('servidor_inicial', fmt.servidor_inicial || 'jugador1')
+  }
+
+  const chooseQuickPair = (pair, precomputedBracket = null) => {
     if (isSubmitting) return
     for (const field of [
       'equipo1_id',
@@ -252,12 +293,207 @@ export default function GestionPartidos() {
       'origen_partido2_id',
     ])
       setValue(field, '')
+
+    const currentRound = watch('ronda') || ''
+    const bracketMatchup =
+      precomputedBracket ||
+      findBracketMatchupForTeam({
+        teamId: pair.equipo_id,
+        categoryId: pair.categoria_id,
+        matches: partidos,
+        tournamentId: selectedTournamentId,
+        system: selectedTournament?.sistema,
+        targetRound: selectedPhase === 'eliminacion' ? currentRound : '',
+      })
+
+    setValue('categoria_id', String(pair.categoria_id), { shouldValidate: true })
     setValue('participante1_tipo', 'fijo')
-    setValue('participante2_tipo', 'fijo')
-    setValue('categoria_id', String(pair.categoria_id))
-    setValue('grupo', selectedPhase === 'grupos' ? pair.grupo || '' : '')
     setValue('equipo1_id', String(pair.equipo_id), { shouldValidate: true })
+
+    if (bracketMatchup?.hasCategoryBracket && bracketMatchup?.inBracket) {
+      // Esta categoría ya tiene su cuadro eliminatorio (ej. 5ta):
+      // Cambiamos automáticamente a fase eliminatoria y ponemos el único rival contemplado en el bracket
+      setValue('fase', 'eliminacion', { shouldValidate: true })
+      setValue('grupo', '')
+      setValue('ronda', bracketMatchup.ronda || currentRound || 'Cuartos de final', {
+        shouldValidate: true,
+      })
+      setLinkedBracketMatchId(bracketMatchup.matchId || null)
+
+      if (bracketMatchup.opponentType === 'fijo' && bracketMatchup.opponentTeamId) {
+        setValue('participante2_tipo', 'fijo')
+        setValue('origen_partido2_id', '')
+        setValue('equipo2_id', String(bracketMatchup.opponentTeamId), { shouldValidate: true })
+      } else if (
+        bracketMatchup.opponentType === 'ganador' &&
+        bracketMatchup.opponentSourceMatchId
+      ) {
+        setValue('participante2_tipo', 'ganador')
+        setValue('equipo2_id', '')
+        setValue('origen_partido2_id', String(bracketMatchup.opponentSourceMatchId), {
+          shouldValidate: true,
+        })
+      } else {
+        setValue('participante2_tipo', 'por_definir')
+        setValue('equipo2_id', '')
+        setValue('origen_partido2_id', '')
+      }
+
+      const existingM = bracketMatchup.match
+      if (existingM) {
+        if (existingM.fecha_inicio && !getValues('fecha_inicio')) {
+          setValue('fecha_inicio', existingM.fecha_inicio.slice(0, 10))
+        }
+        if (existingM.hora_inicio && !getValues('hora_inicio')) {
+          setValue('hora_inicio', existingM.hora_inicio.slice(0, 5))
+        }
+        if (existingM.cancha?.id && !getValues('cancha_id')) {
+          setValue('cancha_id', String(existingM.cancha.id))
+        }
+        if (existingM.juez?.id && !getValues('juez_id')) {
+          setValue('juez_id', String(existingM.juez.id))
+        }
+        applyMatchScoringToForm(existingM)
+      }
+    } else {
+      // Categoría en fase de grupos (ej. 4ta): continúa normal
+      setLinkedBracketMatchId(null)
+      const nextPhase =
+        selectedTournament?.sistema === 'eliminacion_directa' ? 'eliminacion' : 'grupos'
+      setValue('fase', nextPhase, { shouldValidate: true })
+      setValue('grupo', nextPhase === 'grupos' ? pair.grupo || '' : '')
+      if (nextPhase === 'grupos') setValue('ronda', '')
+      setValue('participante2_tipo', 'fijo')
+    }
   }
+
+  const handleCategorySelectInWizard = (nextCatId) => {
+    const normalizedCat = nextCatId ? String(nextCatId) : ''
+    setValue('categoria_id', normalizedCat, { shouldValidate: true })
+
+    // Si la pareja seleccionada pertenece a otra categoría, limpiar selección
+    const currentEq1 = watch('equipo1_id')
+    if (currentEq1) {
+      const currentPair = quickChoices.find((p) => String(p.equipo_id) === String(currentEq1))
+      if (!normalizedCat || String(currentPair?.categoria_id) !== normalizedCat) {
+        setLinkedBracketMatchId(null)
+        setValue('equipo1_id', '')
+        setValue('equipo2_id', '')
+        setValue('origen_partido1_id', '')
+        setValue('origen_partido2_id', '')
+        setValue('participante1_tipo', 'fijo')
+        setValue('participante2_tipo', 'fijo')
+      }
+    }
+
+    if (normalizedCat) {
+      const elimMatches = getCategoryBracketMatches(
+        partidos,
+        selectedTournamentId,
+        normalizedCat,
+        selectedTournament?.sistema
+      )
+      if (elimMatches.length > 0) {
+        setValue('fase', 'eliminacion', { shouldValidate: true })
+        setValue('grupo', '')
+        const currentRound = watch('ronda') || ''
+        if (currentRound) {
+          const rKey = roundInfo(currentRound).key
+          const existsInCat = elimMatches.some((m) => roundInfo(m.ronda).key === rKey)
+          if (!existsInCat) {
+            setValue('ronda', '', { shouldValidate: true })
+          }
+        }
+      } else if (
+        selectedPhase !== 'eliminacion' &&
+        selectedTournament?.sistema !== 'eliminacion_directa'
+      ) {
+        setValue('fase', 'grupos', { shouldValidate: true })
+        setValue('ronda', '')
+      }
+    }
+  }
+
+  const handleRoundSelectInWizard = (nextRound) => {
+    const normalizedRound = nextRound || ''
+    setValue('ronda', normalizedRound, { shouldValidate: true })
+
+    const currentEq1 = watch('equipo1_id')
+    if (currentEq1 && selectedCategoryId) {
+      const pairObj = quickChoices.find(
+        (p) =>
+          String(p.equipo_id) === String(currentEq1) &&
+          String(p.categoria_id) === String(selectedCategoryId)
+      )
+      const matchup = findBracketMatchupForTeam({
+        teamId: currentEq1,
+        categoryId: selectedCategoryId,
+        matches: partidos,
+        tournamentId: selectedTournamentId,
+        system: selectedTournament?.sistema,
+        targetRound: normalizedRound,
+      })
+      if (matchup?.hasCategoryBracket) {
+        if (matchup.inBracket && matchup.inSelectedRound && pairObj) {
+          chooseQuickPair(pairObj, matchup)
+        } else {
+          // La pareja que estaba seleccionada no participa en esta ronda: limpiar para mostrar solo los de esta ronda
+          setLinkedBracketMatchId(null)
+          setValue('equipo1_id', '')
+          setValue('equipo2_id', '')
+          setValue('origen_partido1_id', '')
+          setValue('origen_partido2_id', '')
+          setValue('participante1_tipo', 'fijo')
+          setValue('participante2_tipo', 'fijo')
+        }
+      }
+    }
+  }
+
+  const selectBracketMatch = (match, s1, s2) => {
+    if (isSubmitting || !match) return
+    const catId = String(match.categoria?.id ?? match.categoria_id ?? '')
+    setLinkedBracketMatchId(Number(match.id))
+    setValue('categoria_id', catId, { shouldValidate: true })
+    setValue('fase', 'eliminacion', { shouldValidate: true })
+    setValue('grupo', '')
+    setValue('ronda', match.ronda || 'Cuartos de final', { shouldValidate: true })
+
+    if (s1?.type === 'fijo' && s1.id) {
+      setValue('participante1_tipo', 'fijo')
+      setValue('equipo1_id', String(s1.id), { shouldValidate: true })
+      setValue('origen_partido1_id', '')
+    } else if (s1?.type === 'ganador' && s1.sourceMatchId) {
+      setValue('participante1_tipo', 'ganador')
+      setValue('equipo1_id', '')
+      setValue('origen_partido1_id', String(s1.sourceMatchId), { shouldValidate: true })
+    } else {
+      setValue('participante1_tipo', 'por_definir')
+      setValue('equipo1_id', '')
+      setValue('origen_partido1_id', '')
+    }
+
+    if (s2?.type === 'fijo' && s2.id) {
+      setValue('participante2_tipo', 'fijo')
+      setValue('equipo2_id', String(s2.id), { shouldValidate: true })
+      setValue('origen_partido2_id', '')
+    } else if (s2?.type === 'ganador' && s2.sourceMatchId) {
+      setValue('participante2_tipo', 'ganador')
+      setValue('equipo2_id', '')
+      setValue('origen_partido2_id', String(s2.sourceMatchId), { shouldValidate: true })
+    } else {
+      setValue('participante2_tipo', 'por_definir')
+      setValue('equipo2_id', '')
+      setValue('origen_partido2_id', '')
+    }
+
+    if (match.fecha_inicio) setValue('fecha_inicio', match.fecha_inicio.slice(0, 10))
+    if (match.hora_inicio) setValue('hora_inicio', match.hora_inicio.slice(0, 5))
+    if (match.cancha?.id) setValue('cancha_id', String(match.cancha.id))
+    if (match.juez?.id) setValue('juez_id', String(match.juez.id))
+    applyMatchScoringToForm(match)
+  }
+
   const participant1Mode = watch('participante1_tipo') || 'fijo'
   const participant2Mode = watch('participante2_tipo') || 'fijo'
   const sourceMatches = partidos.filter(
@@ -265,8 +501,8 @@ export default function GestionPartidos() {
       !(useGroups && selectedPhase === 'grupos') &&
       selectedTournamentId &&
       String(partido.torneo?.id || '') === selectedTournamentId &&
-      String(partido.categoria?.id || '') === selectedCategoryId &&
-      (!editing || partido.id < editing.id)
+      (!selectedCategoryId || String(partido.categoria?.id || '') === selectedCategoryId) &&
+      (!editing || Number(partido.id) !== Number(editing.id))
   )
   const categoriasDisponibles = categorias.filter(
     (categoria) => categoria.deporte === selectedDeporte || categoria.deporte === 'ambos'
@@ -279,17 +515,28 @@ export default function GestionPartidos() {
   }, [jugadores, selectedDeporte, editing, retirements, selectedTournamentId])
 
   const equiposDisponibles = useMemo(() => {
+    const registeredIdsInCategory = new Set(
+      (registrations?.pairs || [])
+        .filter((p) => String(p.categoria_id) === String(selectedCategoryId))
+        .map((p) => Number(p.equipo_id))
+    )
+    if (editing && String(editing.categoria?.id || '') === String(selectedCategoryId)) {
+      if (editing.equipo1?.id) registeredIdsInCategory.add(Number(editing.equipo1.id))
+      if (editing.equipo2?.id) registeredIdsInCategory.add(Number(editing.equipo2.id))
+    }
     const list = equipos.filter(
       (equipo) =>
         equipo.deporte === selectedDeporte &&
         (useGroups
-          ? distribution?.parejas.some(
+          ? (selectedPhase !== 'grupos' && registeredIdsInCategory.has(Number(equipo.id))) ||
+            distribution?.parejas.some(
               (p) =>
                 Number(p.equipo_id) === Number(equipo.id) &&
                 String(p.categoria_id) === selectedCategoryId &&
                 (selectedPhase !== 'grupos' || p.grupo === selectedGroup)
             )
-          : String(equipo.categoria?.id || '') === selectedCategoryId)
+          : String(equipo.categoria?.id || '') === selectedCategoryId ||
+            registeredIdsInCategory.has(Number(equipo.id)))
     )
     return list.filter((p) => availableParticipant(p.id, 'parejas'))
   }, [
@@ -297,6 +544,7 @@ export default function GestionPartidos() {
     selectedDeporte,
     useGroups,
     distribution,
+    registrations,
     selectedCategoryId,
     selectedPhase,
     selectedGroup,
@@ -326,9 +574,10 @@ export default function GestionPartidos() {
             ['juez', 'juez_director', 'admin'].includes(usuario.rol)
           )
         )
-        setTorneos(
-          (tournaments.data || []).filter((tournament) => tournament.estado !== 'cancelado')
+        const activeTournaments = (tournaments.data || []).filter(
+          (tournament) => tournament.estado !== 'cancelado'
         )
+        setTorneos(activeTournaments)
         setCategorias(categories.data || [])
         const courtResponses = await Promise.all(
           (locations.data || []).map(async (location) => {
@@ -352,6 +601,16 @@ export default function GestionPartidos() {
   useEffect(() => {
     const t = searchParams.get('torneo')
     setFilterTorneo(t || 'todos')
+    if (t && /^\d+$/.test(t)) {
+      setBracketTorneoId(t)
+    }
+    if (searchParams.get('brackets') === '1') {
+      setShowBracketsView(true)
+    }
+    if (searchParams.get('armar') === '1') {
+      setShowBracketsView(true)
+      setAutoOpenBracketBuilder(true)
+    }
     if (searchParams.get('crear') === '1') {
       openCreate()
       const next = new URLSearchParams(searchParams)
@@ -360,21 +619,58 @@ export default function GestionPartidos() {
     }
   }, [searchParams])
 
-  const openCreate = () => {
+  // Torneos con soporte de fase eliminatoria (brackets)
+  const knockoutTournaments = useMemo(
+    () =>
+      torneos.filter(
+        (t) => !t.archivado && ['grupos_eliminacion', 'eliminacion_directa'].includes(t.sistema)
+      ),
+    [torneos]
+  )
+  const activeBracketTournament = useMemo(() => {
+    if (bracketTorneoId) {
+      const found = torneos.find((t) => String(t.id) === String(bracketTorneoId))
+      if (found) return found
+    }
+    if (filterTorneo !== 'todos' && filterTorneo !== 'sin_torneo') {
+      const found = torneos.find((t) => String(t.id) === String(filterTorneo))
+      if (found) return found
+    }
+    const withExistingBrackets = knockoutTournaments.find((t) =>
+      partidos.some(
+        (p) =>
+          p.estado !== 'cancelado' &&
+          String(p.torneo?.id) === String(t.id) &&
+          (t.sistema === 'eliminacion_directa' ||
+            String(p.fase || '').toLowerCase() === 'eliminacion')
+      )
+    )
+    return withExistingBrackets || knockoutTournaments[0] || torneos[0] || null
+  }, [bracketTorneoId, filterTorneo, knockoutTournaments, torneos, partidos])
+
+  const openCreate = (presetPhase = null) => {
     setSubmitError('')
+    setLinkedBracketMatchId(null)
     const selectedTorneo = searchParams.get('torneo') || filterTorneo
-    const defaultTorneo = /^\d+$/.test(selectedTorneo) ? selectedTorneo : ''
+    const fallbackTorneo =
+      knockoutTournaments[0] || torneos.find((t) => !t.archivado) || torneos[0] || null
+    const defaultTorneo = /^\d+$/.test(selectedTorneo)
+      ? selectedTorneo
+      : fallbackTorneo
+        ? String(fallbackTorneo.id)
+        : ''
+    const initialPhase = presetPhase === 'eliminacion' ? 'eliminacion' : 'grupos'
     reset({
       torneo_id: defaultTorneo,
-      deporte: 'tenis',
-      modalidad: 'individual',
+      deporte: fallbackTorneo?.deporte || 'tenis',
+      modalidad: fallbackTorneo?.modalidad || 'individual',
       categoria_id: '',
       estado: 'programado',
       participante1_tipo: 'fijo',
       participante2_tipo: 'fijo',
-      fase: 'grupos',
+      fase: initialPhase,
       grupo: '',
-      ronda: '',
+      ronda: initialPhase === 'eliminacion' ? 'Cuartos de final' : '',
       juez_id: '',
       cancha_id: '',
       mejor_de_sets: '3',
@@ -393,8 +689,12 @@ export default function GestionPartidos() {
 
   const openEdit = (partido) => {
     setSubmitError('')
+    setLinkedBracketMatchId(null)
     setEditing(partido)
     const tId = partido.torneo?.id ? String(partido.torneo.id) : ''
+    const hasP1 = Boolean(partido.equipo1?.id || partido.jugador1?.id)
+    const hasP2 = Boolean(partido.equipo2?.id || partido.jugador2?.id)
+    const isElim = partido.fase === 'eliminacion'
     reset({
       torneo_id: tId,
       deporte: partido.deporte || 'tenis',
@@ -411,8 +711,20 @@ export default function GestionPartidos() {
       jugador2_id: partido.jugador2?.id ? String(partido.jugador2.id) : '',
       equipo1_id: partido.equipo1?.id ? String(partido.equipo1.id) : '',
       equipo2_id: partido.equipo2?.id ? String(partido.equipo2.id) : '',
-      participante1_tipo: partido.origen_partido1 ? 'ganador' : 'fijo',
-      participante2_tipo: partido.origen_partido2 ? 'ganador' : 'fijo',
+      participante1_tipo: hasP1
+        ? 'fijo'
+        : partido.origen_partido1
+          ? 'ganador'
+          : isElim
+            ? 'por_definir'
+            : 'fijo',
+      participante2_tipo: hasP2
+        ? 'fijo'
+        : partido.origen_partido2
+          ? 'ganador'
+          : isElim
+            ? 'por_definir'
+            : 'fijo',
       origen_partido1_id: partido.origen_partido1?.id ? String(partido.origen_partido1.id) : '',
       origen_partido2_id: partido.origen_partido2?.id ? String(partido.origen_partido2.id) : '',
       notas: partido.notas || '',
@@ -446,6 +758,8 @@ export default function GestionPartidos() {
   }
 
   const validateEncounter = (data) => {
+    const isKnockout =
+      selectedPhase === 'eliminacion' || selectedTournament?.sistema === 'eliminacion_directa'
     if (useGroups) {
       if (!distribution || groupError)
         throw new Error(groupError || 'Espera a que se carguen los grupos antes de guardar.')
@@ -459,7 +773,11 @@ export default function GestionPartidos() {
       }
     }
     for (const side of [1, 2]) {
-      if (data[`participante${side}_tipo`] === 'ganador') {
+      const mode = data[`participante${side}_tipo`]
+      if (isKnockout && mode === 'por_definir') {
+        continue
+      }
+      if (mode === 'ganador') {
         if (
           !sourceMatches.some(
             (match) => String(match.id) === String(data[`origen_partido${side}_id`])
@@ -476,7 +794,7 @@ export default function GestionPartidos() {
         )
       }
     }
-    if (data.participante1_tipo !== 'ganador' && data.participante2_tipo !== 'ganador') {
+    if (data.participante1_tipo === 'fijo' && data.participante2_tipo === 'fijo') {
       const prefix = selectedModality === 'dobles' ? 'equipo' : 'jugador'
       if (String(data[`${prefix}1_id`]) === String(data[`${prefix}2_id`])) {
         throw new Error('Selecciona dos participantes diferentes.')
@@ -507,11 +825,11 @@ export default function GestionPartidos() {
       const fields = [
         !selectedTournament?.categoria?.id && 'categoria_id',
         useGroups && selectedPhase === 'grupos' && 'grupo',
-        ...[1, 2].map((side) =>
-          data[`participante${side}_tipo`] === 'ganador'
-            ? `origen_partido${side}_id`
-            : `${prefix}${side}_id`
-        ),
+        ...[1, 2].map((side) => {
+          const mode = data[`participante${side}_tipo`]
+          if (mode === 'por_definir') return null
+          return mode === 'ganador' ? `origen_partido${side}_id` : `${prefix}${side}_id`
+        }),
       ].filter(Boolean)
       if (!(await trigger(fields, { shouldFocus: false }))) {
         openManualSelection()
@@ -537,7 +855,9 @@ export default function GestionPartidos() {
     }
   }
   const participantSummary = [1, 2].map((side) => {
-    if (watch(`participante${side}_tipo`) === 'ganador') {
+    const mode = watch(`participante${side}_tipo`)
+    if (mode === 'por_definir') return 'Por definir (Cupo abierto)'
+    if (mode === 'ganador') {
       const source = partidos.find(
         (p) => String(p.id) === String(watch(`origen_partido${side}_id`))
       )
@@ -564,6 +884,8 @@ export default function GestionPartidos() {
     setSubmitError('')
     try {
       validateEncounter(data)
+      const p1Fixed = data.participante1_tipo === 'fijo'
+      const p2Fixed = data.participante2_tipo === 'fijo'
       const payload = {
         torneo_id: data.torneo_id || null,
         deporte: selectedDeporte,
@@ -575,10 +897,12 @@ export default function GestionPartidos() {
         fase: data.fase,
         grupo: data.grupo,
         ronda: data.ronda,
-        jugador1_id: data.jugador1_id,
-        jugador2_id: data.jugador2_id,
-        equipo1_id: data.equipo1_id,
-        equipo2_id: data.equipo2_id,
+        participante1_tipo: data.participante1_tipo,
+        participante2_tipo: data.participante2_tipo,
+        jugador1_id: p1Fixed ? data.jugador1_id : null,
+        jugador2_id: p2Fixed ? data.jugador2_id : null,
+        equipo1_id: p1Fixed ? data.equipo1_id : null,
+        equipo2_id: p2Fixed ? data.equipo2_id : null,
         origen_partido1_id: data.participante1_tipo === 'ganador' ? data.origen_partido1_id : null,
         origen_partido2_id: data.participante2_tipo === 'ganador' ? data.origen_partido2_id : null,
         notas: data.notas,
@@ -601,8 +925,78 @@ export default function GestionPartidos() {
         delete payload.equipo1_id
         delete payload.equipo2_id
       }
+
+      if (editing) {
+        const origSrc1 = editing.origen_partido1?.id || editing.origen_partido1_id || null
+        const origSrc2 = editing.origen_partido2?.id || editing.origen_partido2_id || null
+        const origP1 = editing.equipo1?.id || editing.jugador1?.id || null
+        const origP2 = editing.equipo2?.id || editing.jugador2?.id || null
+        const nextP1 = payload.equipo1_id || payload.jugador1_id || null
+        const nextP2 = payload.equipo2_id || payload.jugador2_id || null
+        if (origSrc1 && !payload.origen_partido1_id && p1Fixed && String(nextP1) === String(origP1)) {
+          payload.origen_partido1_id = origSrc1
+        }
+        if (origSrc2 && !payload.origen_partido2_id && p2Fixed && String(nextP2) === String(origP2)) {
+          payload.origen_partido2_id = origSrc2
+        }
+      }
+
+      const linkedMatch =
+        !editing && linkedBracketMatchId
+          ? partidos.find(
+              (m) =>
+                Number(m.id) === Number(linkedBracketMatchId) &&
+                String(m.categoria?.id ?? m.categoria_id ?? '') === String(selectedCategoryId) &&
+                data.fase === 'eliminacion'
+            )
+          : null
+
+      if (linkedMatch) {
+        const allMap = new Map(partidos.map((m) => [Number(m.id), m]))
+        const slot1 = resolveEffectiveParticipant(linkedMatch, 1, allMap)
+        const slot2 = resolveEffectiveParticipant(linkedMatch, 2, allMap)
+        const origSrc1 =
+          linkedMatch.origen_partido1?.id || linkedMatch.origen_partido1_id || null
+        const origSrc2 =
+          linkedMatch.origen_partido2?.id || linkedMatch.origen_partido2_id || null
+
+        if (
+          selectedModality === 'dobles' &&
+          slot2.id &&
+          Number(payload.equipo1_id) === Number(slot2.id) &&
+          (!payload.equipo2_id || Number(payload.equipo2_id) === Number(slot1.id || 0))
+        ) {
+          // El admin seleccionó primero a la pareja del lado 2 de la llave:
+          // conservamos el orden original (lado 1 / lado 2) de la llave en el árbol
+          const tmpEq = payload.equipo1_id
+          payload.equipo1_id = payload.equipo2_id
+          payload.equipo2_id = tmpEq
+          const tmpSrc = payload.origen_partido1_id
+          payload.origen_partido1_id = payload.origen_partido2_id
+          payload.origen_partido2_id = tmpSrc
+        }
+        if (
+          origSrc1 &&
+          !payload.origen_partido1_id &&
+          (!payload.equipo1_id || Number(payload.equipo1_id) === Number(slot1.id || 0))
+        ) {
+          payload.origen_partido1_id = origSrc1
+        }
+        if (
+          origSrc2 &&
+          !payload.origen_partido2_id &&
+          (!payload.equipo2_id || Number(payload.equipo2_id) === Number(slot2.id || 0))
+        ) {
+          payload.origen_partido2_id = origSrc2
+        }
+      }
+
+      const targetMatch = editing || linkedMatch || null
       // Save rechecks on the server under a scheduling lock; this preview is not authoritative.
-      const review = await matchService.checkSchedule({ ...payload, id: editing?.id || null })
+      const review = await matchService.checkSchedule({
+        ...payload,
+        id: targetMatch?.id || null,
+      })
       const checks = review.data || {}
       if (checks.conflicts?.length)
         throw new Error(checks.conflicts.map((c) => c.message).join('\n'))
@@ -615,16 +1009,20 @@ export default function GestionPartidos() {
         }))
       )
         return
-      if (editing) {
-        await matchService.update(editing.id, {
+      if (targetMatch) {
+        await matchService.update(targetMatch.id, {
           ...payload,
-          expected_control_version: editing.control_version,
+          expected_control_version: targetMatch.control_version,
         })
-        addToast({ type: 'success', title: 'Partido actualizado' })
+        addToast({
+          type: 'success',
+          title: linkedMatch ? 'Llave del bracket programada' : 'Partido actualizado',
+        })
       } else {
         await matchService.create(payload)
         addToast({ type: 'success', title: 'Partido creado' })
       }
+      setLinkedBracketMatchId(null)
       if (createAnother && !editing) {
         setWizardStep(0)
         reset({
@@ -749,19 +1147,163 @@ export default function GestionPartidos() {
 
   return (
     <div className='space-y-6 animate-fade-up'>
-      <div className='flex items-center justify-between'>
+      <div className='flex flex-wrap items-center justify-between gap-3'>
         <div>
           <h1 className='text-xl font-bold' style={{ color: 'var(--text-primary)' }}>
-            Partidos
+            Partidos y Cuadros Eliminatorios
           </h1>
           <p className='text-sm mt-0.5' style={{ color: 'var(--text-muted)' }}>
-            {partidos.length} partido{partidos.length !== 1 ? 's' : ''}
+            {partidos.length} partido{partidos.length !== 1 ? 's' : ''} registrado
+            {partidos.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <Button onClick={openCreate} leftIcon={<Plus className='w-4 h-4' />}>
-          Nuevo partido
-        </Button>
+        <div className='flex flex-wrap items-center gap-2'>
+          {knockoutTournaments.length > 0 && (
+            <>
+              <button
+                type='button'
+                onClick={() => {
+                  setAutoOpenBracketBuilder(true)
+                  setShowBracketsView(true)
+                }}
+                className='btn-secondary px-3.5 py-2 text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 border-[var(--color-brand)] text-[var(--color-brand)]'
+              >
+                <Trophy className='w-4 h-4' />
+                <span>Armar Brackets</span>
+              </button>
+              <button
+                type='button'
+                onClick={() => {
+                  setAutoOpenBracketBuilder(false)
+                  setShowBracketsView((v) => !v)
+                }}
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 border transition-all ${
+                  showBracketsView
+                    ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]'
+                    : 'btn-secondary'
+                }`}
+              >
+                <GitBranch className='w-4 h-4' />
+                <span>{showBracketsView ? 'Ocultar Cuadros' : 'Ver Cuadros'}</span>
+              </button>
+            </>
+          )}
+          <Button onClick={() => openCreate()} leftIcon={<Plus className='w-4 h-4' />}>
+            Nuevo partido
+          </Button>
+        </div>
       </div>
+
+      {/* Acceso directo y gestor integrado de Cuadros Eliminatorios (Brackets) */}
+      {knockoutTournaments.length > 0 && !showBracketsView && (
+        <div className='card p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 border border-emerald-500/30 bg-emerald-500/5'>
+          <div className='flex items-center gap-3 min-w-0'>
+            <div className='w-10 h-10 rounded-xl bg-emerald-500/15 text-[var(--color-brand)] flex items-center justify-center shrink-0'>
+              <Trophy className='w-5 h-5' />
+            </div>
+            <div className='min-w-0'>
+              <p className='text-xs sm:text-sm font-extrabold text-[var(--text-primary)]'>
+                Cuadros de Fase Eliminatoria (Brackets estilo Champions)
+              </p>
+              <p className='text-xs text-[var(--text-secondary)]'>
+                Arma todas las llaves por categoría (desde Dieciseisavos, Octavos, Cuartos o Semis) o
+                programa llaves individuales.
+              </p>
+            </div>
+          </div>
+          <div className='flex flex-wrap items-center gap-2 shrink-0'>
+            <button
+              type='button'
+              onClick={() => openCreate('eliminacion')}
+              className='btn-secondary px-3 py-1.5 text-xs font-bold inline-flex items-center gap-1.5'
+            >
+              <Plus className='w-3.5 h-3.5' /> Partido de llave
+            </button>
+            <button
+              type='button'
+              onClick={() => {
+                setAutoOpenBracketBuilder(false)
+                setShowBracketsView(true)
+              }}
+              className='btn-primary px-3.5 py-1.5 text-xs font-bold inline-flex items-center gap-1.5'
+            >
+              <GitBranch className='w-3.5 h-3.5' /> Ver Cuadros Creados
+            </button>
+            <button
+              type='button'
+              onClick={() => {
+                setAutoOpenBracketBuilder(true)
+                setShowBracketsView(true)
+              }}
+              className='btn-secondary px-3.5 py-1.5 text-xs font-bold inline-flex items-center gap-1.5 text-[var(--color-brand)] border-[var(--color-brand)]/40'
+            >
+              <Sparkles className='w-3.5 h-3.5' /> Armar / Configurar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showBracketsView && activeBracketTournament && (
+        <div className='card p-3 sm:p-4 space-y-3 border-2 border-[var(--color-brand)]/40'>
+          <div className='flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[var(--border-color)]'>
+            <div className='flex flex-wrap items-center gap-2'>
+              <span className='text-xs font-extrabold uppercase tracking-wider text-[var(--color-brand)] flex items-center gap-1.5'>
+                <Trophy className='w-4 h-4' /> Gestor de Brackets:
+              </span>
+              {knockoutTournaments.length > 1 ? (
+                <select
+                  aria-label='Seleccionar torneo para ver brackets'
+                  className='form-input text-xs py-1 px-2.5 font-bold'
+                  value={activeBracketTournament.id}
+                  onChange={(e) => setBracketTorneoId(e.target.value)}
+                >
+                  {knockoutTournaments.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.nombre}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <strong className='text-xs sm:text-sm font-extrabold text-[var(--text-primary)]'>
+                  {activeBracketTournament.nombre}
+                </strong>
+              )}
+            </div>
+            <div className='flex items-center gap-2'>
+              <button
+                type='button'
+                onClick={() => openCreate('eliminacion')}
+                className='btn-secondary px-2.5 py-1 text-xs font-bold inline-flex items-center gap-1'
+              >
+                <Plus className='w-3.5 h-3.5' /> Crear partido de llave
+              </button>
+              <button
+                type='button'
+                onClick={() => {
+                  setShowBracketsView(false)
+                  setAutoOpenBracketBuilder(false)
+                }}
+                className='btn-ghost p-1.5 rounded-lg text-xs'
+                title='Cerrar vista de cuadros'
+              >
+                <X className='w-4 h-4' />
+              </button>
+            </div>
+          </div>
+
+          <TournamentBracket
+            key={`${activeBracketTournament.id}-${autoOpenBracketBuilder ? 'open' : 'view'}`}
+            matches={partidos.filter(
+              (p) => String(p.torneo?.id) === String(activeBracketTournament.id)
+            )}
+            system={activeBracketTournament.sistema}
+            management={true}
+            tournament={activeBracketTournament}
+            onRefresh={fetchAll}
+            initialOpenBuilder={autoOpenBracketBuilder}
+          />
+        </div>
+      )}
 
       {/* Modal nuevo/editar */}
       {searchParams.get('partido') && (
@@ -791,7 +1333,7 @@ export default function GestionPartidos() {
             ? editing.torneo?.nombre
               ? `${editing.torneo.nombre} · Modifica los datos del encuentro`
               : 'Partido libre · Modifica los datos del encuentro'
-            : 'Programa un nuevo partido libre o asociado a un torneo'
+            : 'Programa un nuevo partido libre, de fase de grupos o de llave eliminatoria'
         }
         icon={editing ? Pencil : Plus}
         maxWidth={editing ? 'max-w-3xl' : 'max-w-6xl'}
@@ -930,6 +1472,245 @@ export default function GestionPartidos() {
                   )}
                 </div>
 
+                {selectedTournament &&
+                  ['grupos_eliminacion', 'eliminacion_directa'].includes(
+                    selectedTournament.sistema
+                  ) && (
+                    <div className='sm:col-span-2 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-input)] p-3.5 space-y-3'>
+                      <div className='flex flex-wrap items-center justify-between gap-2'>
+                        <div className='flex flex-wrap items-center gap-2'>
+                          <span className='text-xs font-extrabold uppercase tracking-wider text-[var(--text-secondary)]'>
+                            Fase del partido:
+                          </span>
+                          {selectedTournament.sistema === 'grupos_eliminacion' ? (
+                            <div className='inline-flex rounded-xl p-0.5 bg-[var(--bg-card)] border border-[var(--border-color)]'>
+                              {[
+                                ['grupos', 'Fase de grupos'],
+                                ['eliminacion', '🏆 Fase eliminatoria (Brackets)'],
+                              ].map(([pVal, pLabel]) => (
+                                <button
+                                  key={pVal}
+                                  type='button'
+                                  onClick={() => {
+                                    setValue('fase', pVal, { shouldValidate: true })
+                                    if (pVal === 'eliminacion') {
+                                      setValue('grupo', '')
+                                    } else {
+                                      setValue('ronda', '')
+                                      setLinkedBracketMatchId(null)
+                                    }
+                                  }}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                    selectedPhase === pVal
+                                      ? 'bg-[var(--color-brand)] text-white'
+                                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                                  }`}
+                                >
+                                  {pLabel}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className='px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500/15 text-[var(--color-brand)]'>
+                              Eliminación directa
+                            </span>
+                          )}
+                        </div>
+
+                        <button
+                          type='button'
+                          onClick={() => {
+                            setBracketTorneoId(String(selectedTournamentId))
+                            setShowForm(false)
+                            setAutoOpenBracketBuilder(true)
+                            setShowBracketsView(true)
+                          }}
+                          className='btn-secondary px-2.5 py-1 text-xs font-extrabold text-[var(--color-brand)] border-[var(--color-brand)]/40 inline-flex items-center gap-1'
+                        >
+                          <Sparkles size={13} /> Armar cuadro completo por categoría →
+                        </button>
+                      </div>
+
+                      {(selectedPhase === 'eliminacion' ||
+                        selectedTournament.sistema === 'eliminacion_directa') && (
+                        <div className='space-y-3 pt-2 border-t border-[var(--border-color)]'>
+                          {/* 1. Píldoras de Categoría visibles directamente */}
+                          {!selectedTournament.categoria && categoriasDisponibles.length > 0 && (
+                            <div className='space-y-1.5'>
+                              <span className='block text-[11px] font-bold text-[var(--text-secondary)]'>
+                                1. Categoría de la llave (filtra solo parejas en eliminación de esa categoría):
+                              </span>
+                              <div className='flex flex-wrap gap-1.5'>
+                                {categoriasDisponibles
+                                  .filter((cat) => {
+                                    const hasPairsInTournament = quickChoices.some(
+                                      (p) => String(p.categoria_id) === String(cat.id)
+                                    )
+                                    const hasMatchesInTournament = partidos.some(
+                                      (m) =>
+                                        String(m.torneo?.id) === String(selectedTournamentId) &&
+                                        String(m.categoria?.id) === String(cat.id)
+                                    )
+                                    return (
+                                      !quickChoices.length ||
+                                      hasPairsInTournament ||
+                                      hasMatchesInTournament
+                                    )
+                                  })
+                                  .map((cat) => {
+                                    const isCatActive = String(selectedCategoryId) === String(cat.id)
+                                    const elimCount = partidos.filter(
+                                      (m) =>
+                                        m.estado !== 'cancelado' &&
+                                        String(m.torneo?.id) === String(selectedTournamentId) &&
+                                        String(m.categoria?.id) === String(cat.id) &&
+                                        (m.fase === 'eliminacion' ||
+                                          selectedTournament.sistema === 'eliminacion_directa')
+                                    ).length
+                                    return (
+                                      <button
+                                        key={cat.id}
+                                        type='button'
+                                        onClick={() =>
+                                          handleCategorySelectInWizard(
+                                            isCatActive ? '' : String(cat.id)
+                                          )
+                                        }
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors inline-flex items-center gap-1.5 ${
+                                          isCatActive
+                                            ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]'
+                                            : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border-color)] hover:border-[var(--color-brand)]'
+                                        }`}
+                                      >
+                                        <span>{cat.nombre}</span>
+                                        <span className='opacity-75 text-[10px]'>
+                                          ({elimCount > 0 ? `🏆 ${elimCount} llaves` : 'En Grupos'})
+                                        </span>
+                                      </button>
+                                    )
+                                  })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 2. Píldoras de Ronda eliminatoria */}
+                          <div className='space-y-1.5'>
+                            <span className='block text-[11px] font-bold text-[var(--text-secondary)]'>
+                              2. Ronda de la llave (muestra solo las parejas de esa ronda):
+                            </span>
+                            <div className='flex flex-wrap gap-1.5'>
+                              <button
+                                type='button'
+                                onClick={() => handleRoundSelectInWizard('')}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors ${
+                                  !watch('ronda')
+                                    ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]'
+                                    : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border-color)] hover:border-[var(--color-brand)]'
+                                }`}
+                              >
+                                Todas las rondas
+                              </button>
+                              {[
+                                'Dieciseisavos',
+                                'Octavos de final',
+                                'Cuartos de final',
+                                'Semifinales',
+                                'Final',
+                                'Tercer puesto',
+                              ].map((rLabel) => {
+                                const activeRound = watch('ronda') === rLabel
+                                const countInRound = selectedCategoryId
+                                  ? partidos.filter(
+                                      (m) =>
+                                        m.estado !== 'cancelado' &&
+                                        String(m.torneo?.id) === String(selectedTournamentId) &&
+                                        String(m.categoria?.id) === String(selectedCategoryId) &&
+                                        roundInfo(m.ronda).key === roundInfo(rLabel).key
+                                    ).length
+                                  : partidos.filter(
+                                      (m) =>
+                                        m.estado !== 'cancelado' &&
+                                        String(m.torneo?.id) === String(selectedTournamentId) &&
+                                        (m.fase === 'eliminacion' ||
+                                          selectedTournament.sistema === 'eliminacion_directa') &&
+                                        roundInfo(m.ronda).key === roundInfo(rLabel).key
+                                    ).length
+                                return (
+                                  <button
+                                    key={rLabel}
+                                    type='button'
+                                    onClick={() =>
+                                      handleRoundSelectInWizard(activeRound ? '' : rLabel)
+                                    }
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors inline-flex items-center gap-1 ${
+                                      activeRound
+                                        ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]'
+                                        : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border-color)] hover:border-[var(--color-brand)]'
+                                    }`}
+                                  >
+                                    <span>{rLabel}</span>
+                                    {countInRound > 0 && (
+                                      <span className='text-[10px] opacity-80'>
+                                        ({countInRound} {countInRound === 1 ? 'llave' : 'llaves'})
+                                      </span>
+                                    )}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+
+                          {/* 3. Si ya existen llaves en esa categoría y ronda, mostrarlas para poder editarlas en 1 clic */}
+                          {selectedCategoryId &&
+                            watch('ronda') &&
+                            (() => {
+                              const existingRoundMatches = partidos.filter(
+                                (m) =>
+                                  m.estado !== 'cancelado' &&
+                                  String(m.torneo?.id) === String(selectedTournamentId) &&
+                                  String(m.categoria?.id) === String(selectedCategoryId) &&
+                                  roundInfo(m.ronda).key === roundInfo(watch('ronda')).key &&
+                                  (!editing || Number(m.id) !== Number(editing.id))
+                              )
+                              if (!existingRoundMatches.length) return null
+                              return (
+                                <div className='p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] space-y-1.5'>
+                                  <p className='text-[11px] font-bold text-[var(--text-secondary)]'>
+                                    💡 Ya existen {existingRoundMatches.length} llave(s) en{' '}
+                                    <strong>{watch('ronda')}</strong> de esta categoría. Toca una si
+                                    deseas cargarla o elige directamente una pareja de esta ronda
+                                    abajo:
+                                  </p>
+                                  <div className='flex flex-wrap gap-1.5'>
+                                    {existingRoundMatches.map((m, idx) => {
+                                      const allMap = new Map(
+                                        partidos.map((item) => [Number(item.id), item])
+                                      )
+                                      const s1 = resolveEffectiveParticipant(m, 1, allMap)
+                                      const s2 = resolveEffectiveParticipant(m, 2, allMap)
+                                      return (
+                                        <button
+                                          key={m.id}
+                                          type='button'
+                                          onClick={() => selectBracketMatch(m, s1, s2)}
+                                          className='px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-[var(--border-color)] bg-[var(--bg-input)] hover:border-[var(--color-brand)] text-left'
+                                        >
+                                          <strong className='text-[var(--color-brand)]'>
+                                            Llave #{idx + 1} (#{m.id}):
+                                          </strong>{' '}
+                                          {s1.nombre} vs {s2.nombre}
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )
+                            })()}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                 {!editing && selectedTournamentId && selectedModality === 'dobles' && (
                   <MatchPlanner
                     choices={quickChoices}
@@ -937,12 +1718,19 @@ export default function GestionPartidos() {
                     secondId={watch('equipo2_id')}
                     firstMode={participant1Mode}
                     secondMode={participant2Mode}
+                    firstSourceId={watch('origen_partido1_id')}
+                    secondSourceId={watch('origen_partido2_id')}
+                    sourceMatches={sourceMatches}
+                    standings={tournamentStandings}
                     categoryId={selectedCategoryId}
                     group={selectedGroup}
                     phase={selectedPhase}
+                    round={watch('ronda') || ''}
+                    system={selectedTournament?.sistema || ''}
                     useGroups={useGroups}
                     tournamentId={selectedTournamentId}
                     matches={partidos}
+                    linkedBracketMatchId={linkedBracketMatchId}
                     busy={isSubmitting}
                     loading={!registrations || !retirements || (useGroups && !distribution)}
                     error={registrationError || retirementError || groupError}
@@ -951,11 +1739,50 @@ export default function GestionPartidos() {
                     onSecond={(pair) => {
                       setValue('participante2_tipo', 'fijo')
                       setValue('origen_partido2_id', '')
+                      if (!selectedCategoryId && pair.categoria_id) {
+                        setValue('categoria_id', String(pair.categoria_id))
+                      }
                       setValue('equipo2_id', String(pair.equipo_id), { shouldValidate: true })
                     }}
+                    onCategoryChange={handleCategorySelectInWizard}
+                    onRoundChange={handleRoundSelectInWizard}
+                    onSelectBracketMatch={selectBracketMatch}
+                    onSourceSelect={(side, srcMatch) => {
+                      setValue(`participante${side}_tipo`, 'ganador')
+                      setValue(`equipo${side}_id`, '')
+                      setValue(`jugador${side}_id`, '')
+                      if (!selectedCategoryId && srcMatch.categoria?.id) {
+                        setValue('categoria_id', String(srcMatch.categoria.id))
+                      }
+                      setValue(`origen_partido${side}_id`, String(srcMatch.id), {
+                        shouldValidate: true,
+                      })
+                    }}
+                    onPendingSelect={(side) => {
+                      setValue(`participante${side}_tipo`, 'por_definir')
+                      setValue(`equipo${side}_id`, '')
+                      setValue(`jugador${side}_id`, '')
+                      setValue(`origen_partido${side}_id`, '')
+                    }}
+                    onOpenBracketBuilder={(catId) => {
+                      setBracketTorneoId(String(selectedTournamentId))
+                      if (catId) {
+                        const next = new URLSearchParams(searchParams)
+                        next.set('categoria', String(catId))
+                        setSearchParams(next, { replace: true })
+                      }
+                      setShowForm(false)
+                      setAutoOpenBracketBuilder(true)
+                      setShowBracketsView(true)
+                    }}
                     onClear={() => {
+                      setLinkedBracketMatchId(null)
                       setValue('equipo1_id', '')
                       setValue('equipo2_id', '')
+                      setValue('origen_partido1_id', '')
+                      setValue('origen_partido2_id', '')
+                      setValue('participante1_tipo', 'fijo')
+                      setValue('participante2_tipo', 'fijo')
                     }}
                     onContinue={nextWizardStep}
                     onManual={() => {
@@ -1267,7 +2094,7 @@ export default function GestionPartidos() {
 
                 <details
                   className='match-wizard-advanced sm:col-span-2'
-                  open={editing ? true : undefined}
+                  open
                 >
                   <summary>Formato de puntuación y ajustes</summary>
                   <div
@@ -1896,9 +2723,16 @@ function ParticipantSelector({
         <option value='ganador' disabled={!sourceMatches.length}>
           Ganador de otro partido
         </option>
+        {values.fase === 'eliminacion' && (
+          <option value='por_definir'>{fixedLabel} por definir (pendiente en llave)</option>
+        )}
       </FormSelect>
 
-      {mode === 'ganador' ? (
+      {mode === 'por_definir' ? (
+        <p className='text-xs' style={{ color: 'var(--text-muted)' }}>
+          Este lado quedará como «Por definir» hasta que se asigne la pareja/jugador o clasifique de otra llave.
+        </p>
+      ) : mode === 'ganador' ? (
         <>
           <FormSelect
             key={sourceField}

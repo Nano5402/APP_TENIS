@@ -73,3 +73,169 @@ export function bracketSlot(match, side, bracket) {
   const confirmed = previous?.estado === 'finalizado' && winner?.id && Number(winner.id)===Number(participant?.id)
   return { pending: !confirmed && !historical, source, invalid: Boolean(historical && !confirmed) }
 }
+
+export function resolveEffectiveParticipant(match, side, allMatchesMap) {
+  if (!match) return { id: null, type: 'por_definir', nombre: 'Por definir' }
+  const direct = match[`equipo${side}`] || match[`jugador${side}`]
+  const directId = Number(direct?.id || match[`equipo${side}_id`] || match[`jugador${side}_id`] || 0)
+  if (directId) {
+    const nombre =
+      direct?.nombre ||
+      [direct?.nombre, direct?.apellido].filter(Boolean).join(' ') ||
+      `Participante #${directId}`
+    return {
+      id: directId,
+      type: 'fijo',
+      nombre,
+      participant: direct,
+    }
+  }
+  const srcId = sourceId(match, side)
+  if (srcId && allMatchesMap) {
+    const prev = allMatchesMap.get(Number(srcId))
+    if (prev) {
+      if (prev.estado === 'finalizado' && (prev.ganador === 'jugador1' || prev.ganador === 'jugador2')) {
+        const wSide = prev.ganador === 'jugador1' ? 1 : 2
+        const resolvedWinner = resolveEffectiveParticipant(prev, wSide, allMatchesMap)
+        if (resolvedWinner?.id) {
+          return {
+            ...resolvedWinner,
+            fromMatchId: Number(prev.id),
+          }
+        }
+      }
+      const p1 = prev.equipo1?.nombre || prev.jugador1?.nombre || 'Por definir'
+      const p2 = prev.equipo2?.nombre || prev.jugador2?.nombre || 'Por definir'
+      return {
+        id: null,
+        type: 'ganador',
+        sourceMatchId: Number(prev.id),
+        sourceMatch: prev,
+        nombre: `Ganador: ${p1} vs ${p2}`,
+      }
+    }
+  }
+  return { id: null, type: 'por_definir', nombre: 'Por definir' }
+}
+
+export function getCategoryBracketMatches(matches = [], tournamentId, categoryId, system = '') {
+  if (!tournamentId || !categoryId) return []
+  return matches.filter(
+    (m) =>
+      m.estado !== 'cancelado' &&
+      String(m.torneo?.id ?? m.torneo_id ?? '') === String(tournamentId) &&
+      String(m.categoria?.id ?? m.categoria_id ?? '') === String(categoryId) &&
+      (system === 'eliminacion_directa' || normalize(m.fase) === 'eliminacion')
+  )
+}
+
+export function findBracketMatchupForTeam({
+  teamId,
+  categoryId,
+  matches = [],
+  tournamentId,
+  system = '',
+  targetRound = '',
+}) {
+  const numericTeamId = Number(teamId)
+  if (!numericTeamId || !categoryId || !tournamentId) return null
+
+  const elimMatches = getCategoryBracketMatches(matches, tournamentId, categoryId, system)
+  if (elimMatches.length === 0) {
+    return null
+  }
+
+  const allMap = new Map(matches.map((m) => [Number(m.id), m]))
+  const candidateMatches = []
+  const targetRoundKey = targetRound ? roundInfo(targetRound).key : ''
+  const roundExistsInBracket = Boolean(
+    targetRoundKey &&
+      targetRoundKey !== 'unassigned' &&
+      elimMatches.some((m) => roundInfo(m.ronda).key === targetRoundKey)
+  )
+
+  for (const m of elimMatches) {
+    const slot1 = resolveEffectiveParticipant(m, 1, allMap)
+    const slot2 = resolveEffectiveParticipant(m, 2, allMap)
+    if (slot1.id === numericTeamId || slot2.id === numericTeamId) {
+      const mySide = slot1.id === numericTeamId ? 1 : 2
+      const otherSide = mySide === 1 ? 2 : 1
+      const otherSlot = mySide === 1 ? slot2 : slot1
+      const rInfo = roundInfo(m.ronda)
+      candidateMatches.push({
+        match: m,
+        matchId: Number(m.id),
+        ronda: m.ronda || rInfo.label,
+        roundKey: rInfo.key,
+        roundOrder: rInfo.order,
+        orden_llave: m.orden_llave || null,
+        estado: m.estado,
+        isFinalized: m.estado === 'finalizado',
+        mySide,
+        otherSide,
+        opponentType: otherSlot.type, // 'fijo' | 'ganador' | 'por_definir'
+        opponentTeamId: otherSlot.id ? Number(otherSlot.id) : null,
+        opponentName: otherSlot.nombre || 'Por definir',
+        opponentSourceMatchId: otherSlot.sourceMatchId || null,
+        opponentSourceMatch: otherSlot.sourceMatch || null,
+      })
+    }
+  }
+
+  if (candidateMatches.length === 0) {
+    return {
+      inBracket: false,
+      inSelectedRound: false,
+      hasCategoryBracket: true,
+      reason: 'No forma parte del cuadro eliminatorio de esta categoría',
+    }
+  }
+
+  // Si hay una ronda seleccionada (y esa ronda existe en el bracket de la categoría),
+  // filtramos estrictamente a la llave de esa ronda
+  if (roundExistsInBracket) {
+    const matchesInRound = candidateMatches.filter((c) => c.roundKey === targetRoundKey)
+    if (matchesInRound.length === 0) {
+      const roundsPlayed = [...new Set(candidateMatches.map((c) => c.ronda))].join(', ')
+      return {
+        inBracket: true,
+        inSelectedRound: false,
+        hasCategoryBracket: true,
+        roundsPlayed,
+        reason: `No participa en ${targetRound} (está en: ${roundsPlayed})`,
+      }
+    }
+    return {
+      inBracket: true,
+      inSelectedRound: true,
+      hasCategoryBracket: true,
+      ...matchesInRound[0],
+    }
+  }
+
+  // Si la ronda seleccionada no existe en el bracket de esta categoría pero el usuario filtró por ronda
+  if (targetRoundKey && targetRoundKey !== 'unassigned' && !roundExistsInBracket) {
+    return {
+      inBracket: true,
+      inSelectedRound: false,
+      hasCategoryBracket: true,
+      reason: `Esta categoría no tiene llaves en ${targetRound}`,
+    }
+  }
+
+  // Sin filtro de ronda: priorizar llaves activas (programado / en_juego) sobre finalizadas, y luego la ronda más avanzada
+  candidateMatches.sort((a, b) => {
+    if (a.isFinalized !== b.isFinalized) return Number(a.isFinalized) - Number(b.isFinalized)
+    if (b.roundOrder !== a.roundOrder) return b.roundOrder - a.roundOrder
+    return b.matchId - a.matchId
+  })
+
+  return {
+    inBracket: true,
+    inSelectedRound: true,
+    hasCategoryBracket: true,
+    ...candidateMatches[0],
+  }
+}
+
+

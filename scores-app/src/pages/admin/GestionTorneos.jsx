@@ -3,17 +3,21 @@ import { useEffect, useState, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import {
   ArrowRight,
+  BarChart3,
   CalendarDays,
+  Eye,
+  GitBranch,
   Network,
   Pencil,
   Plus,
+  Swords,
   Trash2,
   Trophy,
   UsersRound,
   X,
   Search,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { tournamentService } from '../../services/tournamentService'
 import { confirm } from '../../utils/confirm'
 import useUIStore from '../../store/useUIStore'
@@ -22,6 +26,7 @@ import Input from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
 import Tabs from '../../components/ui/Tabs'
 import { formatDate } from '../../utils/formatDate'
+import AdminTournamentInspector from '../../components/tournament/AdminTournamentInspector'
 
 const ESTADOS = [
   { value: 'proximo', label: 'Próximo' },
@@ -66,6 +71,7 @@ const SISTEMAS = [
 ]
 
 export default function GestionTorneos() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [torneos, setTorneos] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -77,6 +83,10 @@ export default function GestionTorneos() {
   const [archiveBusy, setArchiveBusy] = useState(null)
   const [loadError, setLoadError] = useState('')
   const [archiveFeedback, setArchiveFeedback] = useState(null)
+  const [selectedTorneoId, setSelectedTorneoId] = useState(() => searchParams.get('torneo') || '')
+  const [inspectorSection, setInspectorSection] = useState(
+    () => searchParams.get('seccion') || 'bracket'
+  )
   const { addToast } = useUIStore()
   const {
     register,
@@ -104,11 +114,39 @@ export default function GestionTorneos() {
     })
   }, [torneos, statusTab, deporteFilter, search, archiveFilter])
 
+  const selectedTournament = useMemo(
+    () => torneos.find((t) => String(t.id) === String(selectedTorneoId)) || null,
+    [torneos, selectedTorneoId]
+  )
+
+  const openInspector = (torneoId, section = 'bracket') => {
+    setSelectedTorneoId(String(torneoId))
+    setInspectorSection(section)
+    setSearchParams({ torneo: String(torneoId), seccion: section }, { replace: true })
+  }
+
+  const closeInspector = () => {
+    setSelectedTorneoId('')
+    setSearchParams({}, { replace: true })
+  }
+
   const fetchAll = () => {
     setLoading(true)
     tournamentService
       .getAll({ archivo: 'todos' })
-      .then((tournaments) => { setTorneos(tournaments.data || []); setLoadError('') })
+      .then((tournaments) => {
+        const list = tournaments.data || []
+        setTorneos(list)
+        setLoadError('')
+        const urlTorneo = searchParams.get('torneo')
+        const urlSeccion = searchParams.get('seccion')
+        if (urlTorneo && list.some((t) => String(t.id) === String(urlTorneo))) {
+          setSelectedTorneoId(String(urlTorneo))
+        } else if (urlSeccion && !urlTorneo) {
+          const firstActive = list.find((t) => !t.archivado) || list[0]
+          if (firstActive) setSelectedTorneoId(String(firstActive.id))
+        }
+      })
       .catch(() => setLoadError('No se pudieron actualizar los torneos. Reintenta antes de realizar cambios.'))
       .finally(() => setLoading(false))
   }
@@ -444,91 +482,237 @@ export default function GestionTorneos() {
             )}
           </div>
         ) : (
-          filtered.map((tournament) => (
-            <article key={tournament.id} className='card p-4 sm:p-5'>
-              <div className='flex flex-col lg:flex-row lg:items-center gap-4'>
-                <div
-                  className='w-12 h-12 rounded-2xl flex items-center justify-center shrink-0'
-                  style={{ backgroundColor: 'var(--color-brand-dim)', color: 'var(--color-brand)' }}
+          filtered.map((tournament) => {
+            const isSelected = String(selectedTorneoId) === String(tournament.id)
+            return (
+              <div key={tournament.id} className='space-y-3'>
+                <article
+                  className={`card p-4 sm:p-5 transition-all ${
+                    isSelected ? 'border-2 border-[var(--color-brand)] shadow-md' : ''
+                  }`}
                 >
-                  <Trophy className='w-6 h-6' />
-                </div>
-                <div className='flex-1 min-w-0'>
-                  <div className='flex flex-wrap items-center gap-2'>
-                    <h2 className='font-bold text-base' style={{ color: 'var(--text-primary)' }}>
-                      {tournament.nombre}
-                    </h2>
-                    {tournament.archivado && <span className='badge'>Archivado · historial conservado</span>}
-                    <span className={ESTADO_BADGE[tournament.estado] || 'badge'}>
-                      {ESTADOS.find((status) => status.value === tournament.estado)?.label}
-                    </span>
+                  <div className='flex flex-col lg:flex-row lg:items-center gap-4'>
+                    <button
+                      type='button'
+                      onClick={() =>
+                        isSelected ? closeInspector() : openInspector(tournament.id, 'bracket')
+                      }
+                      className='flex items-start sm:items-center gap-3.5 flex-1 min-w-0 text-left group'
+                    >
+                      <div
+                        className='w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105'
+                        style={{
+                          backgroundColor: 'var(--color-brand-dim)',
+                          color: 'var(--color-brand)',
+                        }}
+                      >
+                        <Trophy className='w-6 h-6' />
+                      </div>
+                      <div className='flex-1 min-w-0'>
+                        <div className='flex flex-wrap items-center gap-2'>
+                          <h2
+                            className='font-bold text-base group-hover:text-[var(--color-brand)] transition-colors'
+                            style={{ color: 'var(--text-primary)' }}
+                          >
+                            {tournament.nombre}
+                          </h2>
+                          {tournament.archivado && (
+                            <span className='badge'>Archivado · historial conservado</span>
+                          )}
+                          <span className={ESTADO_BADGE[tournament.estado] || 'badge'}>
+                            {ESTADOS.find((status) => status.value === tournament.estado)?.label}
+                          </span>
+                          <span className='text-[11px] font-bold text-[var(--color-brand)] underline ml-1'>
+                            {isSelected ? 'Ocultar detalle' : 'Seleccionar y ver todo a detalle →'}
+                          </span>
+                        </div>
+                        <div
+                          className='flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs'
+                          style={{ color: 'var(--text-muted)' }}
+                        >
+                          <span className='inline-flex items-center gap-1.5'>
+                            <UsersRound className='w-3.5 h-3.5' />
+                            {tournament.modalidad === 'dobles' ? 'Dobles' : 'Individual'} ·{' '}
+                            {tournament.deporte === 'padel' ? 'Pádel' : 'Tenis'}
+                          </span>
+                          <span className='inline-flex items-center gap-1.5'>
+                            <Network className='w-3.5 h-3.5' />
+                            {SISTEMAS.find((system) => system.value === tournament.sistema)?.label}
+                          </span>
+                          <span>{tournament.categoria?.nombre || 'Todas las categorías'}</span>
+                          {(tournament.fecha_inicio || tournament.fecha_fin) && (
+                            <span className='inline-flex items-center gap-1.5'>
+                              <CalendarDays className='w-3.5 h-3.5' />
+                              {formatPeriod(tournament)}
+                            </span>
+                          )}
+                          <span className='font-semibold text-[var(--text-primary)]'>
+                            {tournament.partidos_count} partido
+                            {tournament.partidos_count !== 1 ? 's' : ''} ·{' '}
+                            {tournament.inscripciones_count || 0} inscripciones
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+
+                    <div className='flex flex-wrap items-center gap-2 shrink-0'>
+                      <button
+                        type='button'
+                        onClick={() =>
+                          isSelected ? closeInspector() : openInspector(tournament.id, 'bracket')
+                        }
+                        className={
+                          isSelected
+                            ? 'btn-secondary px-3.5 py-2 text-xs font-bold flex items-center gap-1.5'
+                            : 'btn-primary px-3.5 py-2 text-xs font-bold flex items-center gap-1.5'
+                        }
+                      >
+                        <Eye className='w-3.5 h-3.5' />
+                        <span>{isSelected ? 'Cerrar detalle' : 'Ver todo a detalle'}</span>
+                      </button>
+
+                      <Link
+                        to={`/torneo/${tournament.id}`}
+                        className='btn-secondary px-3 py-2 text-xs'
+                      >
+                        Detalle e inscripciones
+                      </Link>
+
+                      {!tournament.archivado && (
+                        <Link
+                          to={`/admin/partidos?torneo=${tournament.id}&crear=1`}
+                          className='btn-secondary px-3 py-2 flex items-center gap-1.5 text-xs'
+                          title='Programar un nuevo partido en este torneo'
+                        >
+                          <Plus className='w-3.5 h-3.5 text-[var(--color-brand)]' />
+                          <span>Crear partido</span>
+                        </Link>
+                      )}
+
+                      <button
+                        type='button'
+                        className='btn-secondary px-3 py-2 text-xs'
+                        disabled={archiveBusy !== null || loading}
+                        onClick={() => toggleArchive(tournament)}
+                      >
+                        {archiveBusy === tournament.id
+                          ? 'Guardando…'
+                          : tournament.archivado
+                            ? 'Restaurar torneo'
+                            : 'Archivar torneo'}
+                      </button>
+
+                      <button
+                        onClick={() => openEdit(tournament)}
+                        className='btn-ghost p-2'
+                        aria-label='Editar torneo'
+                      >
+                        <Pencil className='w-4 h-4' />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(tournament)}
+                        className='btn-ghost p-2'
+                        style={{ color: '#ef4444' }}
+                        aria-label='Eliminar torneo'
+                      >
+                        <Trash2 className='w-4 h-4' />
+                      </button>
+                    </div>
                   </div>
-                  <div
-                    className='flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs'
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    <span className='inline-flex items-center gap-1.5'>
-                      <UsersRound className='w-3.5 h-3.5' />
-                      {tournament.modalidad === 'dobles' ? 'Dobles' : 'Individual'} ·{' '}
-                      {tournament.deporte === 'padel' ? 'Pádel' : 'Tenis'}
+
+                  {/* Barra rápida de secciones del torneo para abrir cualquier vista con un toque */}
+                  <div className='mt-3.5 pt-3 border-t border-[var(--border-color)] flex flex-wrap items-center gap-2'>
+                    <span className='text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] mr-1'>
+                      Inspeccionar:
                     </span>
-                    <span className='inline-flex items-center gap-1.5'>
-                      <Network className='w-3.5 h-3.5' />
-                      {SISTEMAS.find((system) => system.value === tournament.sistema)?.label}
-                    </span>
-                    <span>{tournament.categoria?.nombre || 'Todas las categorías'}</span>
-                    {(tournament.fecha_inicio || tournament.fecha_fin) && (
-                      <span className='inline-flex items-center gap-1.5'>
-                        <CalendarDays className='w-3.5 h-3.5' />
-                        {formatPeriod(tournament)}
-                      </span>
+                    <button
+                      type='button'
+                      onClick={() => openInspector(tournament.id, 'bracket')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 border transition-all ${
+                        isSelected && inspectorSection === 'bracket'
+                          ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]'
+                          : 'bg-emerald-500/10 text-[var(--color-brand)] border-emerald-500/30 hover:bg-emerald-500/20'
+                      }`}
+                    >
+                      <GitBranch className='w-3.5 h-3.5' />
+                      <span>🏆 Eliminatorias / Brackets</span>
+                    </button>
+
+                    {tournament.modalidad === 'dobles' && (
+                      <>
+                        <button
+                          type='button'
+                          onClick={() => openInspector(tournament.id, 'teams')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 border transition-all ${
+                            isSelected && inspectorSection === 'teams'
+                              ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]'
+                              : 'border-[var(--border-color)] bg-[var(--bg-input)] text-[var(--text-primary)] hover:border-[var(--border-hover)]'
+                          }`}
+                        >
+                          <UsersRound className='w-3.5 h-3.5' />
+                          <span>Parejas inscritas y Grupos</span>
+                        </button>
+                        <button
+                          type='button'
+                          onClick={() => openInspector(tournament.id, 'all_pairs')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 border transition-all ${
+                            isSelected && inspectorSection === 'all_pairs'
+                              ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]'
+                              : 'border-[var(--border-color)] bg-[var(--bg-input)] text-[var(--text-primary)] hover:border-[var(--border-hover)]'
+                          }`}
+                        >
+                          <Swords className='w-3.5 h-3.5' />
+                          <span>Parejas a detalle</span>
+                        </button>
+                      </>
                     )}
+
+                    <button
+                      type='button'
+                      onClick={() => openInspector(tournament.id, 'standings')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 border transition-all ${
+                        isSelected && inspectorSection === 'standings'
+                          ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]'
+                          : 'border-[var(--border-color)] bg-[var(--bg-input)] text-[var(--text-primary)] hover:border-[var(--border-hover)]'
+                      }`}
+                    >
+                      <BarChart3 className='w-3.5 h-3.5' />
+                      <span>Posiciones</span>
+                    </button>
+
+                    <button
+                      type='button'
+                      onClick={() => openInspector(tournament.id, 'matches')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 border transition-all ${
+                        isSelected && inspectorSection === 'matches'
+                          ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]'
+                          : 'border-[var(--border-color)] bg-[var(--bg-input)] text-[var(--text-primary)] hover:border-[var(--border-hover)]'
+                      }`}
+                    >
+                      <CalendarDays className='w-3.5 h-3.5' />
+                      <span>Partidos ({tournament.partidos_count})</span>
+                    </button>
+
+                    <Link
+                      to={`/admin/partidos?torneo=${tournament.id}`}
+                      className='ml-auto text-xs font-semibold text-[var(--color-brand)] hover:underline inline-flex items-center gap-1'
+                    >
+                      Ir a gestión de partidos <ArrowRight className='w-3.5 h-3.5' />
+                    </Link>
                   </div>
-                </div>
-                <div className='flex flex-wrap items-center gap-2 shrink-0'>
-                  <button type='button' className='btn-secondary px-3 py-2 text-xs' disabled={archiveBusy !== null || loading} onClick={() => toggleArchive(tournament)}>{archiveBusy === tournament.id ? 'Guardando…' : tournament.archivado ? 'Restaurar torneo' : 'Archivar torneo'}</button>
-                  <Link to={`/torneo/${tournament.id}`} className='btn-secondary px-3 py-2 text-xs'>
-                    Detalle e inscripciones
-                  </Link>
-                  <span
-                    className='text-xs font-semibold px-3'
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    {tournament.partidos_count} partido{tournament.partidos_count !== 1 ? 's' : ''}
-                  </span>
-                  <Link
-                    to={`/admin/partidos?torneo=${tournament.id}`}
-                    className='btn-secondary px-3 py-2 flex items-center gap-1.5 text-xs'
-                  >
-                    Partidos <ArrowRight className='w-3.5 h-3.5' />
-                  </Link>
-                  {!tournament.archivado && <Link
-                    to={`/admin/partidos?torneo=${tournament.id}&crear=1`}
-                    className='btn-secondary px-3 py-2 flex items-center gap-1.5 text-xs'
-                    title='Programar un nuevo partido en este torneo'
-                  >
-                    <Plus className='w-3.5 h-3.5 text-[var(--color-brand)]' />
-                    <span>Crear partido</span>
-                  </Link>}
-                  <button
-                    onClick={() => openEdit(tournament)}
-                    className='btn-ghost p-2'
-                    aria-label='Editar torneo'
-                  >
-                    <Pencil className='w-4 h-4' />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(tournament)}
-                    className='btn-ghost p-2'
-                    style={{ color: '#ef4444' }}
-                    aria-label='Eliminar torneo'
-                  >
-                    <Trash2 className='w-4 h-4' />
-                  </button>
-                </div>
+                </article>
+
+                {isSelected && selectedTournament && (
+                  <AdminTournamentInspector
+                    key={selectedTournament.id}
+                    tournament={selectedTournament}
+                    initialSection={inspectorSection}
+                    onClose={closeInspector}
+                  />
+                )}
               </div>
-            </article>
-          ))
+            )
+          })
         )}
       </section>}
     </div>

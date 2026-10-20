@@ -146,23 +146,45 @@ export default function TournamentDetail() {
       )}
       {t && (
         <>
-          <header className='card p-5 space-y-2'>
-            <p className='text-sm text-[var(--color-brand)]'>
-              {t.modalidad === 'dobles' ? 'Dobles' : 'Individual'} ·{' '}
-              {t.categoria?.nombre || 'Todas las categorías'}
-            </p>
-            <h1 className='text-2xl font-bold break-words'>{t.nombre}</h1>
-            <p className='text-sm'>
-              {t.estado.replace('_', ' ')} · {t.sistema.replaceAll('_', ' ')}
-            </p>
-            {t.archivado && <p className='text-sm font-semibold'>Torneo archivado · historial disponible</p>}
+          <header className='card p-5 space-y-3'>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+              <div className='space-y-1'>
+                <p className='text-sm font-semibold text-[var(--color-brand)]'>
+                  {t.modalidad === 'dobles' ? 'Dobles' : 'Individual'} ·{' '}
+                  {t.categoria?.nombre || 'Todas las categorías'}
+                </p>
+                <h1 className='text-2xl font-bold break-words'>{t.nombre}</h1>
+                <p className='text-sm text-[var(--text-secondary)]'>
+                  {t.estado.replace('_', ' ')} · {t.sistema.replaceAll('_', ' ')}
+                </p>
+                {t.archivado && (
+                  <p className='text-sm font-semibold'>Torneo archivado · historial disponible</p>
+                )}
+              </div>
+              {admin && (
+                <div className='flex flex-wrap items-center gap-2'>
+                  <Link
+                    to={`/admin/torneos?torneo=${id}`}
+                    className='btn-secondary px-3 py-1.5 text-xs font-semibold'
+                  >
+                    Panel Admin del Torneo
+                  </Link>
+                  <Link
+                    to={`/admin/partidos?torneo=${id}&crear=1`}
+                    className='btn-primary px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5'
+                  >
+                    <Plus className='w-3.5 h-3.5' /> Crear partido
+                  </Link>
+                </div>
+              )}
+            </div>
           </header>
           <div className='flex flex-wrap gap-2' aria-label='Secciones del torneo'>
             {[
               ['matches', 'Partidos'],
               ...(t.modalidad === 'dobles' ? [['teams', 'Parejas inscritas']] : []),
               ['standings', 'Posiciones'],
-              ...(['grupos_eliminacion', 'eliminacion_directa'].includes(t.sistema) ? [['bracket', 'Eliminatorias']] : []),
+              ...(t.sistema !== 'todos_contra_todos' ? [['bracket', 'Eliminatorias']] : []),
               ...(admin ? [['participation', 'Participación']] : []),
             ].map(([v, l]) => (
               <button
@@ -198,7 +220,7 @@ export default function TournamentDetail() {
           Actualizando…
         </p>
       )}
-      {data && tab === 'matches' && (
+      {Array.isArray(data) && tab === 'matches' && (
         <div className='space-y-4'>
           {admin && (
             <div className='flex flex-wrap items-center justify-between gap-3 p-3.5 card'>
@@ -224,7 +246,7 @@ export default function TournamentDetail() {
           <TournamentMatches matches={data} loading={false} />
         </div>
       )}
-      {data && tab === 'teams' && (
+      {data && !Array.isArray(data) && tab === 'teams' && (
         <div className='space-y-4'>
           {admin && t?.modalidad === 'dobles' && (
             <button className='btn-primary px-4 py-2' onClick={() => setAdding(true)}>
@@ -243,8 +265,37 @@ export default function TournamentDetail() {
           />
         </div>
       )}
-      {data && tab === 'standings' && <TournamentStandings data={data} retirements={retirements} />}
-      {!busy && !error && Array.isArray(data) && tab === 'bracket' && <TournamentBracket key={id} matches={data} system={t?.sistema} management={standingsManagement} />}
+      {data && !Array.isArray(data) && tab === 'standings' && (
+        <TournamentStandings data={data} retirements={retirements} />
+      )}
+      {!busy && !error && Array.isArray(data) && tab === 'bracket' && (
+        <div className='space-y-4'>
+          {admin && (
+            <div className='flex flex-wrap items-center justify-between gap-3 p-3.5 card border border-emerald-500/30 bg-emerald-500/5'>
+              <p className='text-xs text-[var(--text-secondary)]'>
+                <strong className='text-[var(--color-brand)]'>Modo Administrador activo:</strong>{' '}
+                Aquí puedes revisar todos los cuadros eliminatorios ya creados por categoría, armar o editar llaves y programar cruces.
+              </p>
+              <div className='flex flex-wrap items-center gap-2'>
+                <Link
+                  to={`/admin/partidos?torneo=${id}&crear=1`}
+                  className='btn-primary px-3 py-1.5 text-xs flex items-center gap-1.5'
+                >
+                  <Plus className='w-3.5 h-3.5' /> Programar partido de llave
+                </Link>
+              </div>
+            </div>
+          )}
+          <TournamentBracket
+            key={id}
+            matches={data}
+            system={t?.sistema}
+            management={admin}
+            tournament={t}
+            onRefresh={refresh}
+          />
+        </div>
+      )}
       {admin && tab === 'participation' && <TournamentRetirements tournamentId={id} onChange={refresh} />}
       {adding && (
         <TournamentTeamsModal

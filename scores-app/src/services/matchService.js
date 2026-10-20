@@ -22,8 +22,10 @@ export const matchService = {
   getUpcoming: () => api.get('/partidos', { params: { estado: 'programado' } }),
   getFinished: () => api.get('/partidos', { params: { estado: 'finalizado' } }),
   create: (data) => api.post('/partidos', data),
+  createKnockoutBracket: (data) => api.post('/partidos/cuadro-eliminatorio', data),
   update: (id, data) => api.put(`/partidos/${id}`, data),
   updateParticipants: (id, data) => api.put(`/partidos/${id}/participantes`, data),
+  updateBracketSlot: (id, data) => api.put(`/partidos/${id}/llave-eliminatoria`, data),
   reassignCourt: (id, cancha_id, expected_control_version) => api.put(`/partidos/${id}/reasignar-cancha`, { cancha_id, expected_control_version }),
   reassignJudge: (id, juez_id, expected_control_version) => api.put(`/partidos/${id}/reasignar-juez`, { juez_id, expected_control_version }),
   walkoverMatch: (id, expected_control_version, ganador, motivo, extra = {}) =>

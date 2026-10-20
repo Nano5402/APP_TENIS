@@ -125,6 +125,7 @@ function NavigationLinks({ isAdmin, isOfficial }) {
   let items
   if (isJuez) {
     items = [
+      { to: '/mi-actividad', icon: Home, label: 'Mi panel' },
       ...NAV_ITEMS.filter((item) => ['/reglamento', '/sponsors', '/profile'].includes(item.to)),
       { to: '/ayuda', icon: BookOpen, label: 'Ayuda' },
       { to: '/juez', icon: Gavel, label: 'Juez' },
@@ -132,6 +133,9 @@ function NavigationLinks({ isAdmin, isOfficial }) {
   } else if (isOfficial) {
     items = [
       ...NAV_ITEMS,
+      ...(user?.rol === 'juez_director'
+        ? [{ to: '/mi-actividad', icon: User, label: 'Mi panel' }]
+        : []),
       { to: '/juez', icon: Gavel, label: 'Juez' },
       ...(isAdmin ? [{ to: '/admin', icon: ShieldCheck, label: 'Administración' }] : []),
     ]

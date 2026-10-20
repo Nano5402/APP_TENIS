@@ -19,6 +19,7 @@ export default function PlayerDashboard() {
   const [tournamentsError, setTournamentsError] = useState('')
   const tournamentRequest = useRef(0)
   const [groupsModalOpen, setGroupsModalOpen] = useState(false)
+  const [modalTargetTab, setModalTargetTab] = useState('standings') // 'standings' | 'bracket'
   const [groupsFilter, setGroupsFilter] = useState('')
   const [groupsCategoryFilter, setGroupsCategoryFilter] = useState('')
   const [error, setError] = useState('')
@@ -136,14 +137,28 @@ export default function PlayerDashboard() {
 
   const quickLinks = [
     {
-      to: '/tennis?tab=results',
-      icon: ListChecks,
-      title: 'Resultados generales',
-      desc: 'Consulta todos los marcadores y partidos finalizados del club.',
-      cta: 'Ver resultados',
+      onClick: () => {
+        if (selectableTournaments.length === 1) {
+          navigate(`/torneo/${selectableTournaments[0].id}?tab=bracket`)
+          return
+        }
+        setModalTargetTab('bracket')
+        setGroupsFilter('')
+        setGroupsCategoryFilter('')
+        setGroupsModalOpen(true)
+      },
+      icon: GitBranch,
+      title: 'Cuadros eliminatorios',
+      badge: 'Fase final',
+      desc:
+        selectableTournaments.length === 1
+          ? `Mira las llaves de eliminación directa de ${selectableTournaments[0].nombre} y descarga el cuadro en imagen.`
+          : 'Consulta cómo van los cruces de octavos, cuartos, semifinales y final por categoría.',
+      cta: 'Ver cuadros eliminatorios',
     },
     {
       onClick: () => {
+        setModalTargetTab('standings')
         setGroupsFilter('')
         setGroupsCategoryFilter('')
         setGroupsModalOpen(true)
@@ -160,18 +175,18 @@ export default function PlayerDashboard() {
       cta: 'Elegir torneo y ver grupos',
     },
     {
-      to: '/tennis?tab=tournaments',
-      icon: Trophy,
-      title: 'Torneos y cuadros',
-      desc: 'Explora los torneos activos, parejas inscritas y llaves de juego.',
-      cta: 'Ir a torneos',
+      to: '/tennis?tab=results',
+      icon: ListChecks,
+      title: 'Resultados generales',
+      desc: 'Consulta todos los marcadores y partidos finalizados del club.',
+      cta: 'Ver resultados',
     },
     {
-      to: '/tennis?tab=upcoming',
-      icon: CalendarDays,
-      title: 'Próximos partidos',
-      desc: 'Revisa toda la programación oficial de encuentros por fecha y categoría.',
-      cta: 'Ver programación',
+      to: '/tennis?tab=tournaments',
+      icon: Trophy,
+      title: 'Torneos y programación',
+      desc: 'Explora los torneos activos, parejas inscritas y próximos partidos.',
+      cta: 'Ir a torneos',
     },
   ]
 
@@ -275,9 +290,9 @@ export default function PlayerDashboard() {
     <Modal
       isOpen={groupsModalOpen}
       onClose={() => setGroupsModalOpen(false)}
-      title='Grupos del torneo'
-      subtitle='Selecciona el torneo para revisar sus grupos, posiciones o cuadro'
-      icon={Users}
+      title={modalTargetTab === 'bracket' ? 'Cuadros de Fase Eliminatoria' : 'Grupos del torneo'}
+      subtitle='Selecciona el torneo para revisar sus cuadros eliminatorios o grupos'
+      icon={modalTargetTab === 'bracket' ? GitBranch : Users}
       maxWidth='max-w-xl'
       footer={
         <div className='flex flex-wrap items-center justify-between gap-2 w-full'>
@@ -407,24 +422,29 @@ export default function PlayerDashboard() {
                     type='button'
                     onClick={() => {
                       setGroupsModalOpen(false)
-                      navigate(`/torneo/${t.id}?tab=standings`)
+                      navigate(`/torneo/${t.id}?tab=bracket`)
                     }}
-                    className='btn-primary px-3.5 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 flex-1 sm:flex-initial justify-center'
+                    className={`${
+                      modalTargetTab === 'bracket' ? 'btn-primary font-bold flex-1 sm:flex-initial' : 'btn-secondary font-semibold'
+                    } px-3.5 py-2 rounded-xl text-xs inline-flex items-center gap-1.5 justify-center`}
                   >
-                    <Users size={14} />
-                    Ver grupos y posiciones
-                    <ChevronRight size={14} />
+                    <GitBranch size={14} />
+                    Ver cuadro eliminatorio
+                    {modalTargetTab === 'bracket' && <ChevronRight size={14} />}
                   </button>
                   <button
                     type='button'
                     onClick={() => {
                       setGroupsModalOpen(false)
-                      navigate(`/torneo/${t.id}?tab=bracket`)
+                      navigate(`/torneo/${t.id}?tab=standings`)
                     }}
-                    className='btn-secondary px-3 py-2 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 justify-center'
+                    className={`${
+                      modalTargetTab === 'standings' ? 'btn-primary font-bold flex-1 sm:flex-initial' : 'btn-secondary font-semibold'
+                    } px-3.5 py-2 rounded-xl text-xs inline-flex items-center gap-1.5 justify-center`}
                   >
-                    <GitBranch size={14} />
-                    Cuadro
+                    <Users size={14} />
+                    Ver grupos y posiciones
+                    {modalTargetTab === 'standings' && <ChevronRight size={14} />}
                   </button>
                 </div>
               </div>

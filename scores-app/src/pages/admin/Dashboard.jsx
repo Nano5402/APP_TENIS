@@ -120,12 +120,13 @@ export default function Dashboard() {
         <h2 className='text-base font-semibold mb-3' style={{ color: 'var(--text-primary)' }}>
           Acciones rápidas
         </h2>
-        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3'>
+        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3'>
           {[
             { label: 'Nuevo jugador', to: '/admin/jugadores', icon: Users },
             { label: 'Nueva pareja', to: '/admin/equipos', icon: Swords },
             { label: 'Nuevo torneo', to: '/admin/torneos', icon: Trophy },
-            { label: 'Nuevo partido', to: '/admin/partidos', icon: CalendarDays },
+            { label: 'Nuevo partido', to: '/admin/partidos?crear=1', icon: CalendarDays },
+            { label: 'Torneos y Brackets', to: '/admin/torneos?seccion=bracket', icon: Trophy },
           ].map((action) => (
             <Link
               key={action.label}

@@ -141,6 +141,18 @@ export default function Home() {
               {live.length > 0 ? 'Ver partidos en vivo' : 'Ver programación en Tenis'}
             </Link>
             <Link
+              to='/tennis?tab=tournaments'
+              className='inline-flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold text-white'
+              style={{
+                backgroundColor: 'rgba(255,255,255,.12)',
+                border: '1px solid rgba(255,255,255,.22)',
+              }}
+            >
+              <Trophy className='w-4 h-4' />
+              Torneos y eliminatorias
+              <ChevronRight className='w-4 h-4' />
+            </Link>
+            <Link
               to='/tennis?tab=results'
               className='inline-flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold text-white'
               style={{

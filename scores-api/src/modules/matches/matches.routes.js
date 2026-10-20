@@ -41,12 +41,16 @@ router.put('/:id/saque', requireAuth, requireOfficial, controller.changeServer)
 router.put('/:id/orden-saque-dobles', requireAuth, requireOfficial, controller.setDoublesOrder)
 router.post('/:id/eventos', requireAuth, requireOfficial, controller.addEvent)
 router.post('/:id/deshacer', requireAuth, requireOfficial, controller.undoEvent)
+// POST /api/partidos/cuadro-eliminatorio — generar árbol de fase eliminatoria (solo admin)
+router.post('/cuadro-eliminatorio', requireAuth, requireAdmin, controller.createKnockoutBracket)
 // POST /api/partidos
 router.post('/', requireAuth, requireOfficial, controller.create)
 // PUT  /api/partidos/:id
 router.put('/:id', requireAuth, requireScorer, controller.update)
 // PUT  /api/partidos/:id/participantes  — renombrar o reasignar participantes
 router.put('/:id/participantes', requireAuth, requireOfficial, controller.updateParticipants)
+// PUT  /api/partidos/:id/llave-eliminatoria — edición manual de llave / clasificado en cuadro eliminatorio (solo admin)
+router.put('/:id/llave-eliminatoria', requireAuth, requireAdmin, controller.updateBracketSlot)
 // PUT  /api/partidos/:id/reasignar-cancha — reasignar cancha
 router.put('/:id/reasignar-cancha', requireAuth, requireOfficial, controller.reassignCourt)
 // PUT  /api/partidos/:id/reasignar-juez — reasignar juez

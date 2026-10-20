@@ -1,0 +1,21 @@
+{
+  "expediente": "DESC-2026-001",
+  "ciudad": "Bucaramanga, Santander",
+  "dia": "15",
+  "mes": "octubre",
+  "anio": "2026",
+  "deportista1": {
+    "nombre": "MATÍAS CORNEJO PRIETO",
+    "telefono": "3183842163",
+    "email": "Augusto_c_23@hotmail.com",
+    "cc": ""
+  },
+  "deportista2": {
+    "nombre": "ANDRÉS ARIZA BELTRÁN",
+    "telefono": "3102142485",
+    "email": "andres_ariza21@hotmail.com",
+    "cc": ""
+  },
+  "categoriaFormalizada": "Quinta (5ta)",
+  "categoriaRealDictaminada": "Cuarta (4ta)"
+}

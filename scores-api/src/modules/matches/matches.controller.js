@@ -69,6 +69,26 @@ exports.updateParticipants = async (req, res) => {
   }
 }
 
+// POST /api/partidos/cuadro-eliminatorio — generar/actualizar árbol eliminatorio de una categoría
+exports.createKnockoutBracket = async (req, res) => {
+  try {
+    const data = await service.createKnockoutBracket(req.body, req.user)
+    realtime.publishMatchChange({ matchId: data?.[0]?.id || data?.partidos?.[0]?.id || 0, action: 'bracket_created' })
+    return success(res, data, 201)
+  } catch (err) {
+    return error(res, err.message, err.status || 500)
+  }
+}
+
+// PUT /api/partidos/:id/llave-eliminatoria — ajuste manual de llave / avance manual en cuadro eliminatorio
+exports.updateBracketSlot = async (req, res) => {
+  try {
+    return changed(res, await service.updateBracketSlot(req.params.id, req.body, req.user), req.params.id, 200, 'bracket_updated')
+  } catch (err) {
+    return error(res, err.message, err.status || 500)
+  }
+}
+
 // PUT /api/partidos/:id/reasignar-cancha — reasignar cancha por juez_director o admin
 exports.reassignCourt = async (req, res) => {
   try {
