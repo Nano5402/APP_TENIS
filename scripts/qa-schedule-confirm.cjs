@@ -133,7 +133,7 @@ const assert = require("node:assert/strict");
           body: JSON.stringify({ ok: true, data }),
         });
       });
-      await page.goto("http://127.0.0.1:4173/admin/partidos");
+      await page.goto("http://127.0.0.1:4173/admin/partidos", { timeout: 30000 });
       await page
         .getByRole("button", { name: "Nuevo partido", exact: true })
         .click();
@@ -193,7 +193,7 @@ const assert = require("node:assert/strict");
         .click();
       await form.locator('[name="torneo_id"]').selectOption("1");
       await form.getByLabel("Encuentra la primera pareja").fill("pendiente");
-      await form.getByLabel("Ver no compatibles").check();
+      await form.getByLabel("Ver no disponibles").check();
       await form.getByRole("button", { name: /Pareja pendiente/ }).waitFor();
       assert.equal(
         await form

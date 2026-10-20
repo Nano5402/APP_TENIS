@@ -74,6 +74,7 @@ export default function AdminTournamentInspector({
     try {
       const isDoubles = tournament.modalidad === 'dobles'
       const [matchesRes, inscRes, standRes, retRes, grpRes, teamsRes] = await Promise.all([
+
         matchService.getAll({ torneo_id: tournament.id }).catch(() => ({ data: [] })),
         isDoubles
           ? tournamentService.getInscripciones(tournament.id).catch(() => ({ data: null }))
@@ -85,6 +86,7 @@ export default function AdminTournamentInspector({
           : Promise.resolve({ data: null }),
         isDoubles
           ? teamService.getAll({ deporte: tournament.deporte || 'tenis' }).catch(() => ({ data: [] }))
+
           : Promise.resolve({ data: [] }),
       ])
       setMatches(Array.isArray(matchesRes?.data) ? matchesRes.data : [])

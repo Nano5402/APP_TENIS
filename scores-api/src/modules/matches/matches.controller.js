@@ -76,7 +76,7 @@ exports.createKnockoutBracket = async (req, res) => {
     realtime.publishMatchChange({ matchId: data?.[0]?.id || data?.partidos?.[0]?.id || 0, action: 'bracket_created' })
     return success(res, data, 201)
   } catch (err) {
-    return error(res, err.message, err.status || 500)
+return error(res, err.status ? err.message : 'No se pudo guardar el cuadro eliminatorio. Reintenta.', err.status || 500)
   }
 }
 
@@ -85,7 +85,7 @@ exports.updateBracketSlot = async (req, res) => {
   try {
     return changed(res, await service.updateBracketSlot(req.params.id, req.body, req.user), req.params.id, 200, 'bracket_updated')
   } catch (err) {
-    return error(res, err.message, err.status || 500)
+return error(res, err.status ? err.message : 'No se pudo guardar la llave eliminatoria. Reintenta.', err.status || 500)
   }
 }
 

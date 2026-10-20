@@ -2,6 +2,20 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const model = import('../../scores-app/src/utils/tournamentBracket.js')
 const match = (id, extra={})=>({id,estado:'programado',fase:'eliminacion',categoria:{id:1,nombre:'Quinta'},...extra})
+test('resolución del rival termina incluso con un ciclo de ganadores', async () => {
+  const { resolveEffectiveParticipant } = await model
+  const a = match(1, { estado:'finalizado', ganador:'jugador1', origen_partido1_id:2 })
+  const b = match(2, { estado:'finalizado', ganador:'jugador1', origen_partido1_id:1 })
+  assert.equal(resolveEffectiveParticipant(a, 1, new Map([[1,a],[2,b]])).id, null)
+})
+test('encuentra llave existente cuando se selecciona primero el rival del lado 2', async () => {
+  const { findBracketMatchupForTeam } = await model
+  const m = match(8, { torneo:{id:3}, ronda:'Final', equipo1:{id:11,nombre:'A'}, equipo2:{id:12,nombre:'B'} })
+  const result = findBracketMatchupForTeam({ teamId:12, categoryId:1, tournamentId:3, matches:[m], targetRound:'Final' })
+  assert.equal(result.matchId, 8)
+  assert.equal(result.mySide, 2)
+  assert.equal(result.opponentTeamId, 11)
+})
 test('cuadro separa categorías por ID y excluye fase de grupos',async()=>{
   const {buildBracket}=await model
   const result=buildBracket([match(1),match(2,{fase:'grupos'}),match(3,{categoria:{id:2,nombre:'Quinta'}})],'grupos_eliminacion','1')

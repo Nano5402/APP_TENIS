@@ -359,10 +359,12 @@ export default function MatchPlanner({
           // Categoría con bracket eliminatorio activo:
           // Solo mostrar las parejas que están en el bracket (y en la ronda seleccionada si hay ronda)
           if (!pairBracket?.inBracket) {
-            reason = 'No clasificó al cuadro eliminatorio de esta categoría'
+reason = 'No clasificó al cuadro eliminatorio de esta categoría'
           } else if (effectiveTargetRound && !pairBracket?.inSelectedRound) {
             reason =
               pairBracket?.reason || `No participa en la ronda seleccionada (${effectiveTargetRound})`
+          } else if (pairBracket?.estado && pairBracket.estado !== 'programado') {
+            reason = 'Esta llave ya inició o finalizó; consulta su resultado desde el cuadro'
           }
         } else if (isElimination) {
           // Si estamos en fase eliminatoria y seleccionó una categoría que aún no está en eliminación / bracket:
@@ -373,7 +375,7 @@ export default function MatchPlanner({
             Array.from(bracketMetaByCategory.values()).some((m) => m.hasBracket)
           ) {
             // Si está en pestaña de Fase Eliminatoria sin elegir categoría aún, mostrar solo categorías que ya están en bracket
-            reason = 'Esta categoría aún continúa en fase de grupos'
+reason = 'Esta categoría aún continúa en fase de grupos'
           }
         } else if (useGroups && phase === 'grupos' && !pair.grupo) {
           reason = 'Necesita un grupo asignado'
@@ -793,6 +795,7 @@ export default function MatchPlanner({
                         <button
                           key={m.id}
                           type='button'
+disabled={busy}
                           onClick={() => {
                             if (onSelectBracketMatch) {
                               onSelectBracketMatch(m, s1, s2)
@@ -1181,7 +1184,7 @@ export default function MatchPlanner({
                           checked={onlyQualified}
                           onChange={(e) => setOnlyQualified(e.target.checked)}
                         />{' '}
-                        🏅 Solo clasificados (1° y 2°)
+🏅 Solo clasificados (1° y 2°)
                       </label>
                     )}
                   <label className='cursor-pointer'>

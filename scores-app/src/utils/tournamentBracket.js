@@ -74,8 +74,12 @@ export function bracketSlot(match, side, bracket) {
   return { pending: !confirmed && !historical, source, invalid: Boolean(historical && !confirmed) }
 }
 
-export function resolveEffectiveParticipant(match, side, allMatchesMap) {
+export function resolveEffectiveParticipant(match, side, allMatchesMap, visited = new Set()) {
   if (!match) return { id: null, type: 'por_definir', nombre: 'Por definir' }
+  const key = `${match.id}:${side}`
+  if (visited.has(key)) return { id: null, type: 'por_definir', nombre: 'Origen inválido' }
+  visited.add(key)
+
   const direct = match[`equipo${side}`] || match[`jugador${side}`]
   const directId = Number(direct?.id || match[`equipo${side}_id`] || match[`jugador${side}_id`] || 0)
   if (directId) {
@@ -96,7 +100,7 @@ export function resolveEffectiveParticipant(match, side, allMatchesMap) {
     if (prev) {
       if (prev.estado === 'finalizado' && (prev.ganador === 'jugador1' || prev.ganador === 'jugador2')) {
         const wSide = prev.ganador === 'jugador1' ? 1 : 2
-        const resolvedWinner = resolveEffectiveParticipant(prev, wSide, allMatchesMap)
+const resolvedWinner = resolveEffectiveParticipant(prev, wSide, allMatchesMap, visited)
         if (resolvedWinner?.id) {
           return {
             ...resolvedWinner,

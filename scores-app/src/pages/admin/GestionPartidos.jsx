@@ -341,7 +341,7 @@ export default function GestionPartidos() {
 
       const existingM = bracketMatchup.match
       if (existingM) {
-        if (existingM.fecha_inicio && !getValues('fecha_inicio')) {
+if (existingM.fecha_inicio && !getValues('fecha_inicio')) {
           setValue('fecha_inicio', existingM.fecha_inicio.slice(0, 10))
         }
         if (existingM.hora_inicio && !getValues('hora_inicio')) {
@@ -352,6 +352,9 @@ export default function GestionPartidos() {
         }
         if (existingM.juez?.id && !getValues('juez_id')) {
           setValue('juez_id', String(existingM.juez.id))
+        }
+        if (existingM.notas && !getValues('notas')) {
+          setValue('notas', existingM.notas)
         }
         applyMatchScoringToForm(existingM)
       }
@@ -451,7 +454,7 @@ export default function GestionPartidos() {
   }
 
   const selectBracketMatch = (match, s1, s2) => {
-    if (isSubmitting || !match) return
+if (isSubmitting || !match) return
     const catId = String(match.categoria?.id ?? match.categoria_id ?? '')
     setLinkedBracketMatchId(Number(match.id))
     setValue('categoria_id', catId, { shouldValidate: true })
@@ -487,10 +490,11 @@ export default function GestionPartidos() {
       setValue('origen_partido2_id', '')
     }
 
-    if (match.fecha_inicio) setValue('fecha_inicio', match.fecha_inicio.slice(0, 10))
+if (match.fecha_inicio) setValue('fecha_inicio', match.fecha_inicio.slice(0, 10))
     if (match.hora_inicio) setValue('hora_inicio', match.hora_inicio.slice(0, 5))
     if (match.cancha?.id) setValue('cancha_id', String(match.cancha.id))
     if (match.juez?.id) setValue('juez_id', String(match.juez.id))
+    if (match.notas) setValue('notas', match.notas)
     applyMatchScoringToForm(match)
   }
 
@@ -946,10 +950,12 @@ export default function GestionPartidos() {
           ? partidos.find(
               (m) =>
                 Number(m.id) === Number(linkedBracketMatchId) &&
+Number(m.torneo?.id ?? m.torneo_id) === Number(payload.torneo_id) &&
                 String(m.categoria?.id ?? m.categoria_id ?? '') === String(selectedCategoryId) &&
                 data.fase === 'eliminacion'
             )
           : null
+
 
       if (linkedMatch) {
         const allMap = new Map(partidos.map((m) => [Number(m.id), m]))
@@ -974,6 +980,9 @@ export default function GestionPartidos() {
           const tmpSrc = payload.origen_partido1_id
           payload.origen_partido1_id = payload.origen_partido2_id
           payload.origen_partido2_id = tmpSrc
+const tmpMode = payload.participante1_tipo
+            payload.participante1_tipo = payload.participante2_tipo
+            payload.participante2_tipo = tmpMode
         }
         if (
           origSrc1 &&
@@ -1397,7 +1406,7 @@ export default function GestionPartidos() {
                 loading={isSubmitting}
                 disabled={useGroups && (!distribution || !!groupError)}
               >
-                {editing ? 'Guardar cambios' : 'Crear partido'}
+                {editing ? 'Guardar cambios' : linkedBracketMatchId ? 'Guardar programación' : 'Crear partido'}
               </Button>
             )}
           </div>

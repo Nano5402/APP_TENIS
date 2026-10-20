@@ -1,6 +1,7 @@
 import { getParticipantName } from './matchParticipants'
 import { sourceId } from './tournamentBracket'
 
+
 /**
  * Generador de póster PNG en alta resolución (Broadcast / Grand Slam Edition)
  * para Cuadros de Fase Eliminatoria del Club Unión.
@@ -78,9 +79,11 @@ async function loadImageSafe(url) {
       clearTimeout(timer)
       resolve(null)
     }
+
     img.src = url
   })
 }
+
 
 function getParticipantDisplay(match, side, matchLookup) {
   const hasEntity = Boolean((match[`equipo${side}`] || match[`jugador${side}`])?.id)
@@ -960,9 +963,11 @@ export async function downloadBracketPng(options) {
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
+
   setTimeout(() => URL.revokeObjectURL(url), 5000)
   return { fileName, shared: false }
 }
+
 
 export async function shareOrDownloadBracketPng(options) {
   const blob = await generateBracketPngBlob(options)
@@ -986,11 +991,14 @@ export async function shareOrDownloadBracketPng(options) {
         text: `${options.tournamentName || 'Torneo Club Unión'} — Cuadro de Fase Eliminatoria (${options.categoryName || ''}) · Generado desde LEGAL-BRANDING.com`,
         files: [file],
       })
+
       return { fileName, shared: true }
     } catch (err) {
       if (err?.name === 'AbortError') return { fileName, shared: false, cancelled: true }
     }
   }
 
+
   return downloadBracketPng(options)
+
 }

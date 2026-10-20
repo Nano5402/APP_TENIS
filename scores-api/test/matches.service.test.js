@@ -29,6 +29,27 @@ const loadService = (fakeDb) => {
 }
 
 for (const scenario of [
+  { fase:'eliminacion', estado:'programado', valid:true },
+  { fase:'grupos', estado:'programado', valid:false },
+  { fase:'eliminacion', estado:'en_vivo', valid:false },
+]) {
+  test(`participantes pendientes: ${scenario.fase}/${scenario.estado}`, async () => {
+    let inserts = 0
+    const service = loadService({ async query(sql) {
+      if (sql.includes('FROM torneos')) return [[{ id:7, deporte:'tenis', categoria_id:3, modalidad:'dobles', sistema:'grupos_eliminacion' }]]
+      if (sql.includes('INSERT INTO partidos')) { inserts++; return [{ insertId:88 }] }
+      if (sql.includes('WHERE p.id = ? LIMIT 1')) return [[{ id:88, torneo_id:7, torneo_modalidad:'dobles', estado:scenario.estado, fase:scenario.fase }]]
+      return [[]]
+    } })
+    const body = { torneo_id:7, categoria_id:3, fase:scenario.fase, estado:scenario.estado,
+      participante1_tipo:'por_definir', participante2_tipo:'por_definir' }
+    if (scenario.valid) assert.equal((await service.create(body, { id:1,rol:'admin' })).id,88)
+    else await assert.rejects(service.create(body, { id:1,rol:'admin' }), e => e.status === 400)
+    assert.equal(inserts, scenario.valid ? 1 : 0)
+  })
+}
+
+for (const scenario of [
   { name: 'jugador inexistente o inactivo', data: { jugador1_id: 99 }, found: [] },
   { name: 'jugador duplicado', data: { jugador1_id: 11 }, found: [{ id: 11 }] },
   { name: 'identificador inválido', data: { jugador1_id: 'abc' }, found: [] },

@@ -143,6 +143,7 @@ async function checkBracket(browser) {
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true)
     }
     await page.setViewportSize({width:390,height:844})
+    await page.getByRole('button',{name:'Lista',exact:true}).click()
     await page.getByRole('button',{name:'Ronda siguiente'}).click()
     await page.getByText('Participante por confirmar',{exact:true}).filter({visible:true}).waitFor()
     assert.equal(await page.getByLabel('Ronda del cuadro').inputValue(),'Final')

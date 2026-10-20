@@ -37,6 +37,7 @@ import { sedeService } from '../../services/sedeService'
 import useUIStore from '../../store/useUIStore'
 import useAuthStore from '../../store/useAuthStore'
 import ParticipantAvatar from '../ui/ParticipantAvatar'
+import { useDialogFocus } from '../../hooks/useDialogFocus'
 import './TournamentBracket.css'
 
 const STARTING_ROUNDS = [
@@ -315,6 +316,8 @@ export default function TournamentBracket({
   const autoOpenParam = searchParams.get('armar') === '1' || initialOpenBuilder
   const didAutoOpenRef = useRef(false)
   const treeScrollRef = useRef(null)
+  const treeBoardRef = useRef(null)
+  const [connectorPaths, setConnectorPaths] = useState([])
   const roundColRefs = useRef({})
 
   const [category, setCategory] = useState(initialCatParam)
@@ -338,6 +341,7 @@ export default function TournamentBracket({
   const [builderStartRound, setBuilderStartRound] = useState('Cuartos de final')
   const [builderThirdPlace, setBuilderThirdPlace] = useState(false)
   const [builderReplaceScheduled, setBuilderReplaceScheduled] = useState(true)
+  const [builderExpectedMatches, setBuilderExpectedMatches] = useState([])
   const [builderSlots, setBuilderSlots] = useState(() => getDefaultSlotsForRound('Cuartos de final'))
   const [builderScoring, setBuilderScoring] = useState(() => ({ ...DEFAULT_SUPERGAME_FORMAT }))
   const [builderBusy, setBuilderBusy] = useState(false)
@@ -366,6 +370,17 @@ export default function TournamentBracket({
   })
   const [slotSaving, setSlotSaving] = useState(false)
   const [slotError, setSlotError] = useState('')
+  const [contextReady, setContextReady] = useState(false)
+  const builderDialogRef = useDialogFocus(builderOpen, () => setBuilderOpen(false), builderBusy)
+  const slotDialogRef = useDialogFocus(Boolean(editingMatch), () => setEditingMatch(null), slotSaving)
+  const detailDialogRef = useDialogFocus(Boolean(selectedMatchDetail), () => setSelectedMatchDetail(null), false)
+  const dialogOpen = Boolean(builderOpen || editingMatch || selectedMatchDetail)
+  useEffect(() => {
+    if (!dialogOpen) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previous }
+  }, [dialogOpen])
 
   const isDoubles =
     tournament?.modalidad === 'dobles' ||
@@ -1558,7 +1573,10 @@ export default function TournamentBracket({
               aria-label='Rondas de eliminatoria'
               tabIndex={0}
             >
-              <div className={`ucl-tree-board ${zoomOut ? 'is-zoom-out' : ''}`}>
+              <div ref={treeBoardRef} className={`ucl-tree-board ${zoomOut ? 'is-zoom-out' : ''}`}>
+                <svg className='ucl-connectors' aria-hidden='true'>
+                  {connectorPaths.map(path => <path key={path.key} d={path.d} />)}
+                </svg>
                 {(mainTreeRounds.length > 0 ? mainTreeRounds : rounds).map((r) => {
                   const isFinalCol = r.label === 'Final'
                   return (
