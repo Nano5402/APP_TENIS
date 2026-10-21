@@ -10,7 +10,7 @@ const DEFAULT_SUPERGAME = {
   juegos_por_set: 6,
   diferencia_juegos: 2,
   modo_game: 'ventaja',
-  set_decisivo: 'set_completo',
+  set_decisivo: 'match_tiebreak',
   tiebreak_en: 6,
   tiebreak_puntos: 7,
   match_tiebreak_puntos: 10,
@@ -116,8 +116,15 @@ module.exports = ({ pool, transaction, create, update, getById, getAll, normaliz
           if (sameRound.length > count) fail(409, 'La ronda contiene más encuentros que la estructura solicitada')
           for (let i=0; i<count; i++) {
             const old = sameRound[i], slot = r === start ? slots[i] || {} : {}
-            const payload = { ...old, ...DEFAULT_SUPERGAME, ...(body.formato || {}), torneo_id:tournamentId, categoria_id:category,
+            const isSuperGameRound = ['Semifinales', 'Final', 'Tercer puesto'].includes(rounds[r])
+            const defaultDeciding = isSuperGameRound ? 'set_completo' : 'match_tiebreak'
+            const payload = { ...old, ...DEFAULT_SUPERGAME, set_decisivo: defaultDeciding, ...(body.formato || {}), torneo_id:tournamentId, categoria_id:category,
               fase:'eliminacion', grupo:null, ronda:rounds[r], estado:'programado', fecha_inicio:day(old?.fecha_inicio) || null }
+            if (isSuperGameRound) {
+              payload.set_decisivo = 'set_completo'
+            } else if (!slot.set_decisivo && (!body.formato?.set_decisivo || body.formato.set_decisivo === 'set_completo')) {
+              payload.set_decisivo = 'match_tiebreak'
+            }
             for (const side of [1,2]) {
               const source = r > start ? previous[2*i+side-1] : null
               const participant = r === start ? id(slot[`${prefix}${side}_id`] ?? slot[`participante${side}_id`]) : null
@@ -146,7 +153,7 @@ module.exports = ({ pool, transaction, create, update, getById, getAll, normaliz
           previous = current
         }
         if (body.incluir_tercer_puesto && !existing.some(m=>m.ronda === 'Tercer puesto')) {
-          const result = await create({ ...body.formato, torneo_id:tournamentId, categoria_id:category, fase:'eliminacion', ronda:'Tercer puesto',
+          const result = await create({ ...DEFAULT_SUPERGAME, ...(body.formato || {}), set_decisivo:'set_completo', torneo_id:tournamentId, categoria_id:category, fase:'eliminacion', ronda:'Tercer puesto',
             participante1_tipo:'por_definir', participante2_tipo:'por_definir', estado:'programado' }, actor)
           await record(conn, null, result.id, actor)
         }

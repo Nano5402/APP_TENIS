@@ -1041,7 +1041,9 @@ function normalizeScoringConfig(body) {
   if (!['ventaja', 'sin_ventaja'].includes(body.modo_game || 'ventaja')) {
     throw { status: 400, message: 'Selecciona un modo de game válido' }
   }
-  if (!['set_completo', 'match_tiebreak'].includes(body.set_decisivo || 'set_completo')) {
+  const isSuperGameRound = ['Semifinales', 'Final', 'Tercer puesto'].includes(body.ronda)
+  const defaultSetDecisivo = isSuperGameRound ? 'set_completo' : 'match_tiebreak'
+  if (!['set_completo', 'match_tiebreak'].includes(body.set_decisivo || defaultSetDecisivo)) {
     throw { status: 400, message: 'Selecciona un formato válido para el set decisivo' }
   }
   if (!Number.isInteger(tieBreakAt) || tieBreakAt < 0 || tieBreakAt > 12) {
@@ -1063,7 +1065,7 @@ function normalizeScoringConfig(body) {
     juegos_por_set: gamesPerSet,
     diferencia_juegos: gamesDifference,
     modo_game: body.modo_game || 'ventaja',
-    set_decisivo: body.set_decisivo || 'set_completo',
+    set_decisivo: body.set_decisivo || defaultSetDecisivo,
     tiebreak_en: tieBreakAt,
     tiebreak_puntos: tieBreakPoints,
     match_tiebreak_puntos: matchTieBreakPoints,

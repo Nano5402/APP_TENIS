@@ -71,11 +71,19 @@ const DEFAULT_SUPERGAME_FORMAT = {
   juegos_por_set: '6',
   diferencia_juegos: '2',
   modo_game: 'ventaja',
-  set_decisivo: 'set_completo',
+  set_decisivo: 'match_tiebreak',
   tiebreak_en: '6',
   tiebreak_puntos: '7',
   match_tiebreak_puntos: '10',
   servidor_inicial: 'jugador1',
+}
+
+function getDefaultScoringForRound(roundName) {
+  const isSuperGame = ['Semifinales', 'Final', 'Tercer puesto'].includes(roundName)
+  return {
+    ...DEFAULT_SUPERGAME_FORMAT,
+    set_decisivo: isSuperGame ? 'set_completo' : 'match_tiebreak',
+  }
 }
 
 function getDefaultSlotsForRound(roundKey) {
@@ -109,7 +117,7 @@ function ScoringConfigPanel({ value, onChange }) {
               Formato de puntuación
             </p>
             <p className='text-[11px] mt-0.5 m-0' style={{ color: 'var(--text-muted)' }}>
-              Configurable por partido. El control del juez aplicará estas reglas (por defecto Super Game).
+              Configurable por partido. Supertiebreak por defecto (Semifinales y Final en Super Game automáticamente).
             </p>
           </div>
         </div>
@@ -733,7 +741,7 @@ export default function TournamentBracket({
         juegos_por_set: String(fmt.juegos_por_set || 6),
         diferencia_juegos: String(fmt.diferencia_juegos || 2),
         modo_game: fmt.modo_game || 'ventaja',
-        set_decisivo: fmt.set_decisivo || 'set_completo',
+        set_decisivo: fmt.set_decisivo || getDefaultScoringForRound(defaultRound).set_decisivo,
         tiebreak_en: String(fmt.tiebreak_en ?? 6),
         tiebreak_puntos: String(fmt.tiebreak_puntos || 7),
         match_tiebreak_puntos: String(fmt.match_tiebreak_puntos || 10),
@@ -741,10 +749,10 @@ export default function TournamentBracket({
       })
     } else if (catGroups.length > 0) {
       setBuilderSlots(buildRecommendedSlotsFromGroups(catGroups, defaultRound))
-      setBuilderScoring({ ...DEFAULT_SUPERGAME_FORMAT })
+      setBuilderScoring(getDefaultScoringForRound(defaultRound))
     } else {
       setBuilderSlots(getDefaultSlotsForRound(defaultRound))
-      setBuilderScoring({ ...DEFAULT_SUPERGAME_FORMAT })
+      setBuilderScoring(getDefaultScoringForRound(defaultRound))
     }
 
     setBuilderThirdPlace(catThirdRounds.some((r) => r.key === 'Tercer puesto'))
@@ -774,6 +782,11 @@ export default function TournamentBracket({
 
   const handleBuilderRoundChange = (newRoundKey) => {
     setBuilderStartRound(newRoundKey)
+    if (['Semifinales', 'Final'].includes(newRoundKey)) {
+      setBuilderScoring((prev) => ({ ...prev, set_decisivo: 'set_completo' }))
+    } else {
+      setBuilderScoring((prev) => ({ ...prev, set_decisivo: 'match_tiebreak' }))
+    }
     const nextSlots = getDefaultSlotsForRound(newRoundKey)
     nextSlots.forEach((slot, idx) => {
       if (builderSlots[idx]) {
@@ -799,7 +812,7 @@ export default function TournamentBracket({
     setBuilderScoring((prev) => ({
       ...DEFAULT_SUPERGAME_FORMAT,
       ...prev,
-      set_decisivo: 'set_completo',
+      set_decisivo: ['Semifinales', 'Final', 'Tercer puesto'].includes(targetRound) ? 'set_completo' : 'match_tiebreak',
     }))
   }
 
@@ -814,7 +827,7 @@ export default function TournamentBracket({
         juegos_por_set: Number(builderScoring.juegos_por_set || 6),
         diferencia_juegos: Number(builderScoring.diferencia_juegos || 2),
         modo_game: builderScoring.modo_game || 'ventaja',
-        set_decisivo: builderScoring.set_decisivo || 'set_completo',
+        set_decisivo: builderScoring.set_decisivo || (['Semifinales', 'Final'].includes(builderStartRound) ? 'set_completo' : 'match_tiebreak'),
         tiebreak_en: Number(builderScoring.tiebreak_en ?? 6),
         tiebreak_puntos: Number(builderScoring.tiebreak_puntos || 7),
         match_tiebreak_puntos: Number(builderScoring.match_tiebreak_puntos || 10),
@@ -898,7 +911,7 @@ export default function TournamentBracket({
       juegos_por_set: String(fmt.juegos_por_set || 6),
       diferencia_juegos: String(fmt.diferencia_juegos || 2),
       modo_game: fmt.modo_game || 'ventaja',
-      set_decisivo: fmt.set_decisivo || 'set_completo',
+      set_decisivo: fmt.set_decisivo || (['Semifinales', 'Final', 'Tercer puesto'].includes(match.ronda) ? 'set_completo' : 'match_tiebreak'),
       tiebreak_en: String(fmt.tiebreak_en ?? 6),
       tiebreak_puntos: String(fmt.tiebreak_puntos || 7),
       match_tiebreak_puntos: String(fmt.match_tiebreak_puntos || 10),
@@ -917,7 +930,7 @@ export default function TournamentBracket({
         juegos_por_set: Number(slotForm.juegos_por_set || 6),
         diferencia_juegos: Number(slotForm.diferencia_juegos || 2),
         modo_game: slotForm.modo_game || 'ventaja',
-        set_decisivo: slotForm.set_decisivo || 'set_completo',
+        set_decisivo: slotForm.set_decisivo || (['Semifinales', 'Final', 'Tercer puesto'].includes(slotForm.ronda) ? 'set_completo' : 'match_tiebreak'),
         tiebreak_en: Number(slotForm.tiebreak_en ?? 6),
         tiebreak_puntos: Number(slotForm.tiebreak_puntos || 7),
         match_tiebreak_puntos: Number(slotForm.match_tiebreak_puntos || 10),

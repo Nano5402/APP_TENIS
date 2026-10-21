@@ -271,11 +271,13 @@ export default function GestionPartidos() {
 
   const applyMatchScoringToForm = (matchObj) => {
     const fmt = matchObj?.formato || matchObj || {}
+    const targetRound = matchObj?.ronda || getValues('ronda') || ''
+    const isSuperGameRound = ['Semifinales', 'Final', 'Tercer puesto'].includes(targetRound)
     setValue('mejor_de_sets', String(fmt.mejor_de_sets || 3))
     setValue('juegos_por_set', String(fmt.juegos_por_set || 6))
     setValue('diferencia_juegos', String(fmt.diferencia_juegos || 2))
     setValue('modo_game', fmt.modo_game || 'ventaja')
-    setValue('set_decisivo', fmt.set_decisivo || 'set_completo')
+    setValue('set_decisivo', fmt.set_decisivo || (isSuperGameRound ? 'set_completo' : 'match_tiebreak'))
     setValue('tiebreak_en', String(fmt.tiebreak_en ?? 6))
     setValue('tiebreak_puntos', String(fmt.tiebreak_puntos || 7))
     setValue('match_tiebreak_puntos', String(fmt.match_tiebreak_puntos || 10))
@@ -318,12 +320,19 @@ export default function GestionPartidos() {
     if (isEliminationMode && bracketMatchup?.hasCategoryBracket && bracketMatchup?.inBracket) {
       // Esta categoría ya tiene su cuadro eliminatorio (ej. 5ta):
       // Cambiamos automáticamente a fase eliminatoria y ponemos el único rival contemplado en el bracket
+      const targetRound = bracketMatchup.ronda || currentRound || 'Cuartos de final'
       setValue('fase', 'eliminacion', { shouldValidate: true })
       setValue('grupo', '')
-      setValue('ronda', bracketMatchup.ronda || currentRound || 'Cuartos de final', {
+      setValue('ronda', targetRound, {
         shouldValidate: true,
       })
       setLinkedBracketMatchId(bracketMatchup.matchId || null)
+
+      if (['Semifinales', 'Final', 'Tercer puesto'].includes(targetRound)) {
+        setValue('set_decisivo', 'set_completo', { shouldValidate: true })
+      } else if (!bracketMatchup.match?.set_decisivo && !bracketMatchup.match?.formato?.set_decisivo) {
+        setValue('set_decisivo', 'match_tiebreak', { shouldValidate: true })
+      }
 
       if (bracketMatchup.opponentType === 'fijo' && bracketMatchup.opponentTeamId) {
         setValue('participante2_tipo', 'fijo')
@@ -426,6 +435,11 @@ export default function GestionPartidos() {
   const handleRoundSelectInWizard = (nextRound) => {
     const normalizedRound = nextRound || ''
     setValue('ronda', normalizedRound, { shouldValidate: true })
+    if (['Semifinales', 'Final', 'Tercer puesto'].includes(normalizedRound)) {
+      setValue('set_decisivo', 'set_completo', { shouldValidate: true })
+    } else {
+      setValue('set_decisivo', 'match_tiebreak', { shouldValidate: true })
+    }
 
     const currentEq1 = watch('equipo1_id')
     if (currentEq1 && selectedCategoryId) {
@@ -466,7 +480,11 @@ if (isSubmitting || !match) return
     setValue('categoria_id', catId, { shouldValidate: true })
     setValue('fase', 'eliminacion', { shouldValidate: true })
     setValue('grupo', '')
-    setValue('ronda', match.ronda || 'Cuartos de final', { shouldValidate: true })
+    const targetRound = match.ronda || 'Cuartos de final'
+    setValue('ronda', targetRound, { shouldValidate: true })
+    const isSuperGame = ['Semifinales', 'Final', 'Tercer puesto'].includes(targetRound)
+    const defaultDeciding = isSuperGame ? 'set_completo' : 'match_tiebreak'
+    setValue('set_decisivo', match.formato?.set_decisivo || match.set_decisivo || defaultDeciding, { shouldValidate: true })
 
     if (s1?.type === 'fijo' && s1.id) {
       setValue('participante1_tipo', 'fijo')
@@ -687,7 +705,7 @@ if (match.fecha_inicio) setValue('fecha_inicio', match.fecha_inicio.slice(0, 10)
       juegos_por_set: '6',
       diferencia_juegos: '2',
       modo_game: 'ventaja',
-      set_decisivo: 'set_completo',
+      set_decisivo: 'match_tiebreak',
       tiebreak_en: '6',
       tiebreak_puntos: '7',
       match_tiebreak_puntos: '10',
@@ -744,7 +762,7 @@ if (match.fecha_inicio) setValue('fecha_inicio', match.fecha_inicio.slice(0, 10)
       juegos_por_set: String(partido.formato?.juegos_por_set || 6),
       diferencia_juegos: String(partido.formato?.diferencia_juegos || 2),
       modo_game: partido.formato?.modo_game || 'ventaja',
-      set_decisivo: partido.formato?.set_decisivo || 'set_completo',
+      set_decisivo: partido.formato?.set_decisivo || (['Semifinales', 'Final', 'Tercer puesto'].includes(partido.ronda) ? 'set_completo' : 'match_tiebreak'),
       tiebreak_en: String(partido.formato?.tiebreak_en ?? 6),
       tiebreak_puntos: String(partido.formato?.tiebreak_puntos || 7),
       match_tiebreak_puntos: String(partido.formato?.match_tiebreak_puntos || 10),
@@ -1970,7 +1988,23 @@ const tmpMode = payload.participante1_tipo
                             : 'Ej.: Fecha 1'
                         }
                         maxLength={50}
-                        {...register('ronda')}
+                        {...register('ronda', {
+                          onChange: (e) => {
+                            const val = (e.target.value || '').toLowerCase()
+                            if (val.includes('semi') || val.includes('final') || val.includes('tercer')) {
+                              setValue('set_decisivo', 'set_completo')
+                            } else if (
+                              val.includes('cuarto') ||
+                              val.includes('octavo') ||
+                              val.includes('dieciseis') ||
+                              val.includes('16') ||
+                              val.includes('grupo') ||
+                              val.includes('fecha')
+                            ) {
+                              setValue('set_decisivo', 'match_tiebreak')
+                            }
+                          },
+                        })}
                       />
                     )}
 

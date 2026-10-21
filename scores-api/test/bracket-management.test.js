@@ -166,3 +166,18 @@ test('no permite que el mismo jugador integre dos parejas del cuadro inicial', a
   },admin), e => e.status === 400 && /dos parejas/.test(e.message))
   assert.equal(f.creates.length,0)
 })
+
+test('predeterminado en cuartos y previos es supertiebreak, y a partir de semifinales es supergame', async () => {
+  const f = fixture()
+  const qfRequest = { torneo_id: 1, categoria_id: 2, ronda_inicial: 'Cuartos de final', llaves_iniciales: [] }
+  await f.service.createKnockoutBracket(qfRequest, admin)
+  const cuartos = f.creates.filter(m => m.ronda === 'Cuartos de final')
+  assert.equal(cuartos.length, 4)
+  cuartos.forEach(m => assert.equal(m.set_decisivo, 'match_tiebreak'))
+  const semis = f.creates.filter(m => m.ronda === 'Semifinales')
+  assert.equal(semis.length, 2)
+  semis.forEach(m => assert.equal(m.set_decisivo, 'set_completo'))
+  const final = f.creates.filter(m => m.ronda === 'Final')
+  assert.equal(final.length, 1)
+  assert.equal(final[0].set_decisivo, 'set_completo')
+})
