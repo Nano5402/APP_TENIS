@@ -123,7 +123,35 @@ export default function TournamentDetail() {
     }
   }
   return (
-    <section className='space-y-5 min-w-0'>
+    <section className='relative min-w-0'>
+      {busy && (
+        <div
+          role='status'
+          aria-live='polite'
+          className='fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-[4px] bg-black/40 transition-all duration-300'
+        >
+          <div className='card max-w-sm w-full p-6 flex flex-col items-center text-center shadow-2xl border border-[var(--color-brand)]/40 bg-[var(--bg-card)]/95 backdrop-blur-md rounded-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200'>
+            <div className='relative flex items-center justify-center w-16 h-16'>
+              <div className='absolute inset-0 rounded-full bg-[var(--color-brand)]/20 animate-ping' />
+              <div className='relative w-14 h-14 rounded-2xl bg-[var(--bg-input)] border border-[var(--color-brand)]/40 shadow-inner flex items-center justify-center text-[var(--color-brand)]'>
+                <Trophy className='w-7 h-7 animate-pulse' />
+              </div>
+            </div>
+            <div className='space-y-1'>
+              <h3 className='text-base font-bold text-[var(--text-primary)]'>
+                Actualizando torneo…
+              </h3>
+              <p className='text-xs text-[var(--text-secondary)]'>
+                Sincronizando partidos, llaves eliminatorias y resultados en vivo
+              </p>
+            </div>
+            <div className='w-full max-w-[220px] h-1.5 bg-neutral-200 dark:bg-neutral-800 rounded-full overflow-hidden relative'>
+              <div className='h-full w-2/3 bg-gradient-to-r from-emerald-500 via-[var(--color-brand)] to-emerald-400 rounded-full animate-indeterminate-progress' />
+            </div>
+          </div>
+        </div>
+      )}
+      <div className={`space-y-5 transition-all duration-300 ${busy ? 'filter blur-[3px] opacity-70 pointer-events-none select-none' : ''}`}>
       <div className='flex justify-between gap-3'>
         <button
           type='button'
@@ -232,15 +260,6 @@ export default function TournamentDetail() {
           </div>
         </>
       )}
-      {busy && data && (
-        <div className='flex items-center justify-between px-3.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-[var(--color-brand)] font-semibold animate-pulse'>
-          <span className='inline-flex items-center gap-2'>
-            <span className='w-2 h-2 rounded-full bg-[var(--color-brand)] animate-ping' />
-            Sincronizando datos del torneo y marcadores en vivo…
-          </span>
-          <span className='text-[10px] opacity-75 hidden sm:inline'>Tiempo real</span>
-        </div>
-      )}
       {(!data || (busy && !data)) && tab === 'matches' && (
         <div className='space-y-4'>
           {[1, 2, 3].map((k) => (
@@ -336,6 +355,7 @@ export default function TournamentDetail() {
           onSuccess={refresh}
         />
       )}
+      </div>
     </section>
   )
 }

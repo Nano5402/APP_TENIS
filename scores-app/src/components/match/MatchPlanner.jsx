@@ -320,8 +320,7 @@ export default function MatchPlanner({
     return null
   }, [first, firstBracketMatchup, isElimination, suggestedCrossings])
 
-  const groupPhase =
-    useGroups && phase === 'grupos' && !firstBracketMatchup?.hasCategoryBracket
+  const groupPhase = useGroups && phase === 'grupos'
 
   const handleCategoryPick = (nextCatId) => {
     const normalizedCat = nextCatId ? String(nextCatId) : ''
@@ -339,10 +338,7 @@ export default function MatchPlanner({
       const st = standingBadgeByTeam.get(`${pair.categoria_id}-${pair.equipo_id}`) || null
       const pairCatMeta = bracketMetaByCategory.get(String(pair.categoria_id))
       const pairCatHasBracket = Boolean(pairCatMeta?.hasBracket)
-      const effectiveTargetRound =
-        pairCatHasBracket && (isElimination || String(categoryFilter) === String(pair.categoria_id))
-          ? round
-          : ''
+      const effectiveTargetRound = isElimination && pairCatHasBracket ? round : ''
 
       const pairBracket = findBracketMatchupForTeam({
         teamId: pair.equipo_id,
@@ -355,33 +351,35 @@ export default function MatchPlanner({
 
       let reason = ''
       if (side === 1) {
-        if (pairCatHasBracket) {
-          // Categoría con bracket eliminatorio activo:
-          // Solo mostrar las parejas que están en el bracket (y en la ronda seleccionada si hay ronda)
-          if (!pairBracket?.inBracket) {
-reason = 'No clasificó al cuadro eliminatorio de esta categoría'
-          } else if (effectiveTargetRound && !pairBracket?.inSelectedRound) {
-            reason =
-              pairBracket?.reason || `No participa en la ronda seleccionada (${effectiveTargetRound})`
-          } else if (pairBracket?.estado && pairBracket.estado !== 'programado') {
-            reason = 'Esta llave ya inició o finalizó; consulta su resultado desde el cuadro'
-          }
-        } else if (isElimination) {
-          // Si estamos en fase eliminatoria y seleccionó una categoría que aún no está en eliminación / bracket:
-          if (standingBadgeByTeam.size > 0 && st && !st.qualified) {
-            reason = `No clasificó a fase eliminatoria (${st.posicion}° en ${st.grupo})`
-          } else if (
-            !categoryFilter &&
-            Array.from(bracketMetaByCategory.values()).some((m) => m.hasBracket)
-          ) {
-            // Si está en pestaña de Fase Eliminatoria sin elegir categoría aún, mostrar solo categorías que ya están en bracket
-reason = 'Esta categoría aún continúa en fase de grupos'
+        if (isElimination) {
+          if (pairCatHasBracket) {
+            // Categoría con bracket eliminatorio activo:
+            // Solo mostrar las parejas que están en el bracket (y en la ronda seleccionada si hay ronda)
+            if (!pairBracket?.inBracket) {
+              reason = 'No clasificó al cuadro eliminatorio de esta categoría'
+            } else if (effectiveTargetRound && !pairBracket?.inSelectedRound) {
+              reason =
+                pairBracket?.reason || `No participa en la ronda seleccionada (${effectiveTargetRound})`
+            } else if (pairBracket?.estado && pairBracket.estado !== 'programado') {
+              reason = 'Esta llave ya inició o finalizó; consulta su resultado desde el cuadro'
+            }
+          } else {
+            // Si estamos en fase eliminatoria y seleccionó una categoría que aún no está en eliminación / bracket:
+            if (standingBadgeByTeam.size > 0 && st && !st.qualified) {
+              reason = `No clasificó a fase eliminatoria (${st.posicion}° en ${st.grupo})`
+            } else if (
+              !categoryFilter &&
+              Array.from(bracketMetaByCategory.values()).some((m) => m.hasBracket)
+            ) {
+              reason = 'Esta categoría aún continúa en fase de grupos'
+            }
           }
         } else if (useGroups && phase === 'grupos' && !pair.grupo) {
           reason = 'Necesita un grupo asignado'
         }
       } else if (side === 2 && first) {
         if (
+          isElimination &&
           !unlockBracketRival &&
           firstBracketMatchup?.hasCategoryBracket &&
           firstBracketMatchup?.inBracket
@@ -400,7 +398,11 @@ reason = 'Esta categoría aún continúa en fase de grupos'
           } else if (firstBracketMatchup.opponentType === 'ganador') {
             reason = `Según el bracket (${firstBracketMatchup.ronda}), espera a ${firstBracketMatchup.opponentName}`
           }
-        } else if (!unlockBracketRival && standingCrossingOpponentForFirst?.opponent) {
+        } else if (
+          isElimination &&
+          !unlockBracketRival &&
+          standingCrossingOpponentForFirst?.opponent
+        ) {
           if (Number(pair.categoria_id) !== Number(first.categoria_id)) {
             reason = 'Pertenece a otra categoría'
           } else if (
@@ -544,7 +546,7 @@ reason = 'Esta categoría aún continúa en fase de grupos'
     const isAutoLockedOpponent =
       n === 2 &&
       Boolean(pair) &&
-      Boolean(
+      Boolean(        isElimination &&
         firstBracketMatchup?.hasCategoryBracket &&
           firstBracketMatchup?.inBracket &&
           Number(pair.equipo_id) === Number(firstBracketMatchup.opponentTeamId)
@@ -681,7 +683,7 @@ reason = 'Esta categoría aún continúa en fase de grupos'
       )}
 
       {/* Visualizador interactivo del Bracket directamente dentro de Crear Partido */}
-      {activeVisualBracket && activeVisualBracket.rounds.length > 0 && (
+      {isElimination && activeVisualBracket && activeVisualBracket.rounds.length > 0 && (
         <div className='p-3 rounded-2xl border border-emerald-500/35 bg-[var(--bg-input)] space-y-2.5'>
           <div className='flex flex-wrap items-center justify-between gap-2'>
             <div className='flex items-center gap-2'>
@@ -897,7 +899,7 @@ disabled={busy}
       </div>
 
       {/* Banner informativo cuando la pareja elegida pertenece a un Bracket Eliminatorio */}
-      {first && firstBracketMatchup?.hasCategoryBracket && firstBracketMatchup?.inBracket && (
+      {isElimination && first && firstBracketMatchup?.hasCategoryBracket && firstBracketMatchup?.inBracket && (
         <div className='p-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 flex flex-wrap items-center justify-between gap-2 text-xs'>
           <div className='space-y-0.5'>
             <div className='font-extrabold text-[var(--color-brand)] flex items-center gap-1.5'>
@@ -943,7 +945,7 @@ disabled={busy}
           <Check size={18} />
           <span>
             <strong>
-              {firstBracketMatchup?.inBracket
+              {isElimination && firstBracketMatchup?.inBracket
                 ? `Llave de ${firstBracketMatchup.ronda} lista para programar`
                 : isElimination
                   ? 'Llave lista para programar'
@@ -955,7 +957,7 @@ disabled={busy}
                 categories.find(([id]) => String(id) === String(categoryId))?.[1] ||
                 'Categoría lista'}{' '}
               ·{' '}
-              {firstBracketMatchup?.inBracket
+              {isElimination && firstBracketMatchup?.inBracket
                 ? `Bracket eliminatorio · ${firstBracketMatchup.ronda}`
                 : groupPhase
                   ? group
@@ -973,7 +975,7 @@ disabled={busy}
           </button>
         </div>
       )}
-      {meetings.length > 0 && !firstBracketMatchup?.inBracket && (
+      {meetings.length > 0 && !(isElimination && firstBracketMatchup?.inBracket) && (
         <p role='status' className='match-planner__warning'>
           <AlertTriangle size={17} /> Estas parejas ya tienen {meetings.length} encuentro(s) en este
           torneo. Revisa si necesitas crear otro.
@@ -1115,7 +1117,7 @@ disabled={busy}
                     : activeCategoryBracketMeta?.hasBracket
                       ? `Parejas en fase de eliminación · ${activeCategoryBracketMeta.nombre}`
                       : 'Encuentra la primera pareja'
-                  : firstBracketMatchup?.inBracket
+                  : isElimination && firstBracketMatchup?.inBracket
                     ? `Rival contemplado en el bracket de ${first?.categoria_nombre} (${firstBracketMatchup.ronda})`
                     : 'Busca un rival compatible'}
               </label>
@@ -1148,7 +1150,7 @@ disabled={busy}
                     )
                   })}
                 </select>
-                {useGroups && !activeCategoryBracketMeta?.hasBracket && !isElimination && (
+                {useGroups && !isElimination && (
                   <select
                     aria-label='Filtrar parejas por grupo'
                     className='form-input'
@@ -1167,9 +1169,9 @@ disabled={busy}
                 <span>
                   {side === 2
                     ? 'Rivales compatibles'
-                    : round && (isElimination || activeCategoryBracketMeta?.hasBracket)
+                    : round && isElimination
                       ? `Parejas en ${round}`
-                      : activeCategoryBracketMeta?.hasBracket || isElimination
+                      : isElimination
                         ? 'Parejas en eliminación'
                         : 'Parejas'}{' '}
                   · {visible.length}
@@ -1292,7 +1294,7 @@ disabled={busy}
                               : 'No hay parejas disponibles en esta selección'}
                       </strong>
                       <p>
-                        {side === 2 && firstBracketMatchup?.inBracket
+                        {side === 2 && isElimination && firstBracketMatchup?.inBracket
                           ? `En el bracket de ${first?.categoria_nombre} (${firstBracketMatchup.ronda}), ${first?.nombre} solo puede enfrentarse a ${firstBracketMatchup.opponentName}.`
                           : round && activeVisualBracket?.rounds?.length
                             ? `Las rondas activas en el bracket de ${activeCategoryBracketMeta?.nombre || 'esta categoría'} son: ${activeVisualBracket.rounds.map((r) => r.label).join(', ')}. Selecciona una de esas rondas arriba.`

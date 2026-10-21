@@ -283,7 +283,7 @@ export default function GestionPartidos() {
   }
 
   const chooseQuickPair = (pair, precomputedBracket = null) => {
-    if (isSubmitting) return
+    // Reset previous participant ids
     for (const field of [
       'equipo1_id',
       'equipo2_id',
@@ -295,22 +295,27 @@ export default function GestionPartidos() {
       setValue(field, '')
 
     const currentRound = watch('ronda') || ''
-    const bracketMatchup =
-      precomputedBracket ||
-      findBracketMatchupForTeam({
-        teamId: pair.equipo_id,
-        categoryId: pair.categoria_id,
-        matches: partidos,
-        tournamentId: selectedTournamentId,
-        system: selectedTournament?.sistema,
-        targetRound: selectedPhase === 'eliminacion' ? currentRound : '',
-      })
+    const isEliminationMode =
+      selectedPhase === 'eliminacion' ||
+      selectedTournament?.sistema === 'eliminacion_directa'
+
+    const bracketMatchup = isEliminationMode
+      ? precomputedBracket ||
+        findBracketMatchupForTeam({
+          teamId: pair.equipo_id,
+          categoryId: pair.categoria_id,
+          matches: partidos,
+          tournamentId: selectedTournamentId,
+          system: selectedTournament?.sistema,
+          targetRound: currentRound,
+        })
+      : null
 
     setValue('categoria_id', String(pair.categoria_id), { shouldValidate: true })
     setValue('participante1_tipo', 'fijo')
     setValue('equipo1_id', String(pair.equipo_id), { shouldValidate: true })
 
-    if (bracketMatchup?.hasCategoryBracket && bracketMatchup?.inBracket) {
+    if (isEliminationMode && bracketMatchup?.hasCategoryBracket && bracketMatchup?.inBracket) {
       // Esta categoría ya tiene su cuadro eliminatorio (ej. 5ta):
       // Cambiamos automáticamente a fase eliminatoria y ponemos el único rival contemplado en el bracket
       setValue('fase', 'eliminacion', { shouldValidate: true })
@@ -341,7 +346,7 @@ export default function GestionPartidos() {
 
       const existingM = bracketMatchup.match
       if (existingM) {
-if (existingM.fecha_inicio && !getValues('fecha_inicio')) {
+        if (existingM.fecha_inicio && !getValues('fecha_inicio')) {
           setValue('fecha_inicio', existingM.fecha_inicio.slice(0, 10))
         }
         if (existingM.hora_inicio && !getValues('hora_inicio')) {
@@ -359,13 +364,17 @@ if (existingM.fecha_inicio && !getValues('fecha_inicio')) {
         applyMatchScoringToForm(existingM)
       }
     } else {
-      // Categoría en fase de grupos (ej. 4ta): continúa normal
+      // Modo Fase de Grupos (o categoría en eliminación sin bracket armado aún)
       setLinkedBracketMatchId(null)
       const nextPhase =
-        selectedTournament?.sistema === 'eliminacion_directa' ? 'eliminacion' : 'grupos'
+        selectedTournament?.sistema === 'eliminacion_directa' ? 'eliminacion' : selectedPhase || 'grupos'
       setValue('fase', nextPhase, { shouldValidate: true })
-      setValue('grupo', nextPhase === 'grupos' ? pair.grupo || '' : '')
-      if (nextPhase === 'grupos') setValue('ronda', '')
+      if (nextPhase === 'grupos') {
+        setValue('grupo', pair.grupo || '', { shouldValidate: true })
+        setValue('ronda', '')
+      } else {
+        setValue('grupo', '')
+      }
       setValue('participante2_tipo', 'fijo')
     }
   }
@@ -396,7 +405,7 @@ if (existingM.fecha_inicio && !getValues('fecha_inicio')) {
         normalizedCat,
         selectedTournament?.sistema
       )
-      if (elimMatches.length > 0) {
+      if (selectedPhase === 'eliminacion' || selectedTournament?.sistema === 'eliminacion_directa') {
         setValue('fase', 'eliminacion', { shouldValidate: true })
         setValue('grupo', '')
         const currentRound = watch('ronda') || ''
@@ -407,10 +416,7 @@ if (existingM.fecha_inicio && !getValues('fecha_inicio')) {
             setValue('ronda', '', { shouldValidate: true })
           }
         }
-      } else if (
-        selectedPhase !== 'eliminacion' &&
-        selectedTournament?.sistema !== 'eliminacion_directa'
-      ) {
+      } else {
         setValue('fase', 'grupos', { shouldValidate: true })
         setValue('ronda', '')
       }
@@ -1507,6 +1513,13 @@ const tmpMode = payload.participante1_tipo
                                     } else {
                                       setValue('ronda', '')
                                       setLinkedBracketMatchId(null)
+                                      const currentEq1 = watch('equipo1_id')
+                                      if (currentEq1) {
+                                        const currentPair = quickChoices.find((p) => String(p.equipo_id) === String(currentEq1))
+                                        if (currentPair?.grupo) {
+                                          setValue('grupo', currentPair.grupo, { shouldValidate: true })
+                                        }
+                                      }
                                     }
                                   }}
                                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
