@@ -1,6 +1,12 @@
 const router = require('express').Router()
 const controller = require('./matches.controller')
+const matchesService = require('./matches.service')
+const matchAuditService = require('./matchAudit.service')
+const matchPhotoRoutes = require('./match-photo.routes')
+const neutralOfficial = require('./neutral-official')
+const attentionService = require('../torneos/attention.service')
 const { requireAuth, requireAdmin, requireOfficial, requireDirector, requireScorer } = require('../../middlewares/auth.middleware')
+const { success, error } = require('../../utils/response')
 
 // GET  /api/partidos?estado=en_vivo&deporte=tenis&categoria_id=1
 router.get('/', controller.getAll)
@@ -10,27 +16,40 @@ router.get('/mios', requireAuth, controller.getMyMatches)
 router.get('/gestion/mis-partidos', requireAuth, requireOfficial, controller.getManaged)
 router.get('/gestion/pendientes', requireAuth, requireAdmin, async (_req, res) => {
   res.setHeader('Cache-Control', 'private, no-store')
-  try { res.json({ ok: true, data: await require('../torneos/attention.service').get() }) }
-  catch { res.status(500).json({ ok: false, message: 'No se pudieron consultar los pendientes. Reintenta; no se han modificado datos.' }) }
+  try {
+    const data = await attentionService.get()
+    res.json({ ok: true, data })
+  } catch {
+    res.status(500).json({ ok: false, message: 'No se pudieron consultar los pendientes. Reintenta; no se han modificado datos.' })
+  }
 })
 router.post('/gestion/programacion', requireAuth, requireOfficial, async (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store')
-  try { res.json({ ok: true, data: await require('./matches.service').checkSchedule(req.body, req.user) }) }
-  catch (e) { res.status(e.status || 500).json({ ok: false, message: e.status ? e.message : 'No se pudo revisar la programación. Reintenta.' }) }
+  try {
+    const data = await matchesService.checkSchedule(req.body, req.user)
+    res.json({ ok: true, data })
+  } catch (e) {
+    res.status(e.status || 500).json({ ok: false, message: e.status ? e.message : 'No se pudo revisar la programación. Reintenta.' })
+  }
 })
-router.use('/:id/foto', require('./match-photo.routes'))
+router.use('/:id/foto', matchPhotoRoutes)
+
 // Read-only public results remain available; scoring your own match is not allowed.
 router.use('/:matchId/:operation', (req, res, next) => {
   const guarded = ['control', 'iniciar', 'pausa', 'saque', 'orden-saque-dobles', 'eventos', 'deshacer', 'marcador', 'correccion', 'walkover', 'cancelar-partido']
   if (!guarded.includes(req.params.operation)) return next()
   const authorize = req.params.operation === 'correccion' ? requireDirector : req.params.operation === 'marcador' ? requireScorer : requireOfficial
-  requireAuth(req, res, () => authorize(req, res, () => require('./neutral-official').guard(req, res, next)))
+  requireAuth(req, res, () => authorize(req, res, () => neutralOfficial.guard(req, res, next)))
 })
+
 // GET  /api/partidos/:id
 router.get('/:id/auditoria', requireAuth, requireDirector, async (req, res) => {
-  const { success, error } = require('../../utils/response')
-  try { return success(res, await require('./matchAudit.service').getAudit(req.params.id, req.query.after || 0)) }
-  catch (err) { return error(res, err.status ? err.message : 'No se pudo consultar la auditoría', err.status || 500) }
+  try {
+    const data = await matchAuditService.getAudit(req.params.id, req.query.after || 0)
+    return success(res, data)
+  } catch (err) {
+    return error(res, err.status ? err.message : 'No se pudo consultar la auditoría', err.status || 500)
+  }
 })
 router.get('/:id/estadisticas', controller.getStats)
 router.get('/:id', controller.getById)

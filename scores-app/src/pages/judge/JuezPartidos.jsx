@@ -32,6 +32,7 @@ import MatchCaddie from '../../components/match/MatchCaddie'
 import ModalFinalizarW from '../../components/match/ModalFinalizarW'
 import ModalCancelarPartido from '../../components/match/ModalCancelarPartido'
 import ModalAsignarCancha from '../../components/match/ModalAsignarCancha'
+import JudgePanel from '../../components/judge/JudgePanel'
 import { useMatchTimer } from '../../hooks/useMatchTimer'
 import { useMatchRealtime } from '../../hooks/useMatchRealtime'
 import './judge.css'
@@ -1971,11 +1972,3 @@ export default function JuezPartidos() {
   )
 }
 
-function JudgePanel({ title, children, onClose, busy, compact = false }) {
-  const ref = useRef(null)
-  useEffect(() => { ref.current?.showModal() }, [])
-  return <dialog ref={ref} className={`judge-dialog${compact ? ' judge-dialog-compact' : ''}`} aria-labelledby='judge-panel-title' onCancel={(event) => { event.preventDefault(); if (!busy) onClose() }}>
-    <div className='judge-dialog-heading'><h2 className='font-bold' id='judge-panel-title'>{title}</h2><button className='judge-tool' onClick={onClose} disabled={busy} aria-label='Cerrar panel'><X size={20} /></button></div>
-    <div className='p-4'>{children}</div>
-  </dialog>
-}

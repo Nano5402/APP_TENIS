@@ -1,7 +1,13 @@
 const router = require('express').Router()
-const controller = require('./torneos.controller')
-const { requireAuth, requireAdmin } = require('../../middlewares/auth.middleware')
 const { body } = require('express-validator')
+const controller = require('./torneos.controller')
+const torneosService = require('./torneos.service')
+const groups = require('./grupos.service')
+const retiros = require('./retiros.service')
+const inscripcionesController = require('./inscripciones.controller')
+const posicionesController = require('../posiciones/posiciones.controller')
+const matchRealtime = require('../matches/match-realtime')
+const { requireAuth, requireAdmin, requireDirector } = require('../../middlewares/auth.middleware')
 const validate = require('../../middlewares/validate.middleware')
 
 // ── Validaciones ────────────────────────────────────────────────────────────────
@@ -37,10 +43,14 @@ router.get('/', controller.getAll)
 router.get('/:id', controller.getById)
 router.put('/:id/archivo', requireAuth, requireAdmin, async (req, res) => {
   res.setHeader('Cache-Control', 'no-store')
-  try { res.json({ ok: true, data: await require('./torneos.service').setArchived(req.params.id, req.body?.archivado, req.body?.esperado, req.user.id) }) }
-  catch (e) { res.status(e.status || 500).json({ ok: false, message: e.status ? e.message : 'No se pudo guardar el archivo. Actualiza y reintenta.' }) }
+  try {
+    const data = await torneosService.setArchived(req.params.id, req.body?.archivado, req.body?.esperado, req.user.id)
+    res.json({ ok: true, data })
+  } catch (e) {
+    res.status(e.status || 500).json({ ok: false, message: e.status ? e.message : 'No se pudo guardar el archivo. Actualiza y reintenta.' })
+  }
 })
-const groups = require('./grupos.service')
+
 const groupAction = (action) => async (req, res) => {
   try {
     if (!/^[1-9]\d*$/.test(req.params.id))
@@ -52,6 +62,7 @@ const groupAction = (action) => async (req, res) => {
       .json({ ok: false, message: e.status ? e.message : 'No se pudieron procesar los grupos' })
   }
 }
+
 router.get(
   '/:id/grupos',
   (req, res, next) => {
@@ -68,38 +79,39 @@ router.get(
     return data
   })
 )
+
 router.put(
   '/:id/grupos',
   requireAuth,
   requireAdmin,
   groupAction((req) => groups.save(Number(req.params.id), req.body.grupos, req.body.version, req.user.id))
 )
-router.get('/:torneo_id/posiciones', require('../posiciones/posiciones.controller').getByTorneo)
-router.get('/:torneo_id/posiciones/gestion', requireAuth,
-  require('../../middlewares/auth.middleware').requireDirector,
-  require('../posiciones/posiciones.controller').getByTorneo)
-router.get('/:id/inscripciones', require('./inscripciones.controller').getByTorneo)
-const retiros = require('./retiros.service')
+
+router.get('/:torneo_id/posiciones', posicionesController.getByTorneo)
+router.get('/:torneo_id/posiciones/gestion', requireAuth, requireDirector, posicionesController.getByTorneo)
+router.get('/:id/inscripciones', inscripcionesController.getByTorneo)
+
 router.use('/:id/retiros', (req, res, next) => { res.setHeader('Cache-Control', 'private, no-store'); next() })
 router.get('/:id/retiros/participantes', requireAuth, requireAdmin, groupAction(req => retiros.participants(req.params.id)))
 router.get('/:id/retiros', groupAction(req => retiros.get(req.params.id)))
 router.put('/:id/retiros', requireAuth, requireAdmin, groupAction(async req => {
   const result = await retiros.set(req.params.id, req.body, req.user)
-  require('../matches/match-realtime').publishMatchChange({ action: 'participation_updated' })
+  matchRealtime.publishMatchChange({ action: 'participation_updated' })
   return result
 }))
 router.get('/:id/retiros/auditoria', requireAuth, requireAdmin, groupAction(req => retiros.audit(req.params.id)))
+
 router.post(
   '/:id/inscripciones',
   requireAuth,
   requireAdmin,
-  require('./inscripciones.controller').inscribirBulk
+  inscripcionesController.inscribirBulk
 )
 router.delete(
   '/:id/inscripciones/:equipo_id',
   requireAuth,
   requireAdmin,
-  require('./inscripciones.controller').removeInscripcion
+  inscripcionesController.removeInscripcion
 )
 
 // ── Rutas admin ─────────────────────────────────────────────────────────────────

@@ -40,6 +40,8 @@ import Input from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
 import Tabs from '../../components/ui/Tabs'
 import LiveBadge from '../../components/match/LiveBadge'
+import ModalMarcadorManual from '../../components/match/ModalMarcadorManual'
+import ParticipantSelector, { FormSelect } from '../../components/match/ParticipantSelector'
 import { formatClockTime, formatDate } from '../../utils/formatDate'
 import { getMatchupLabel, getParticipantName } from '../../utils/matchParticipants'
 
@@ -2345,132 +2347,20 @@ const tmpMode = payload.participante1_tipo
       </Modal>
 
       {/* Modal Editor de marcador */}
-      <Modal
+      <ModalMarcadorManual
         isOpen={Boolean(showMarcador)}
         onClose={() => setShowMarcador(null)}
-        title='Editar marcador manual'
-        subtitle={`${marcadorParticipante1} vs ${marcadorParticipante2}`}
-        icon={Radio}
-        iconColor='var(--club-clay)'
-        iconBg='rgba(234, 88, 12, 0.15)'
-        maxWidth='max-w-xl'
-        busy={isSubmittingM}
+        marcadorParticipante1={marcadorParticipante1}
+        marcadorParticipante2={marcadorParticipante2}
+        isSubmitting={isSubmittingM}
         onSubmit={handleM(onMarcador)}
-        footer={
-          <>
-            <Button
-              type='button'
-              variant='secondary'
-              onClick={() => setShowMarcador(null)}
-              disabled={isSubmittingM}
-            >
-              Cancelar
-            </Button>
-            <Button type='submit' loading={isSubmittingM}>
-              Guardar marcador
-            </Button>
-          </>
-        }
-      >
-        <div className='space-y-4'>
-          <div className='grid grid-cols-2 gap-4'>
-            <div className='form-group'>
-              <label className='form-label'>Estado</label>
-              <select className='form-input' {...regM('estado')}>
-                {ESTADOS.map((e) => (
-                  <option key={e.value} value={e.value}>
-                    {e.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className='form-group'>
-              <label className='form-label'>Ganador</label>
-              <select className='form-input' {...regM('ganador')}>
-                <option value=''>Sin ganador</option>
-                <option value='jugador1'>{marcadorParticipante1}</option>
-                <option value='jugador2'>{marcadorParticipante2}</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Sets */}
-          <div>
-            <p className='form-label mb-1'>Puntos por set</p>
-            <p className='text-xs mb-3' style={{ color: 'var(--text-muted)' }}>
-              Ingresa los games de cada jugador o equipo. Los tres primeros sets son fijos; los sets
-              adicionales se pueden agregar o quitar.
-            </p>
-            <div className='space-y-2'>
-              {setNumbers.map((num) => (
-                <div key={num} className='flex items-center gap-3'>
-                  <span
-                    className='text-xs font-medium w-12 shrink-0'
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    Set {num}
-                  </span>
-                  <input
-                    type='number'
-                    min='0'
-                    max='99'
-                    placeholder={num > 2 ? '/' : '0'}
-                    className='form-input w-20 text-center'
-                    aria-label={`${marcadorParticipante1}, set ${num}`}
-                    {...regM(`set_${num}_j1`)}
-                  />
-                  <span style={{ color: 'var(--text-muted)' }}>–</span>
-                  <input
-                    type='number'
-                    min='0'
-                    max='99'
-                    placeholder={num > 2 ? '/' : '0'}
-                    className='form-input w-20 text-center'
-                    aria-label={`${marcadorParticipante2}, set ${num}`}
-                    {...regM(`set_${num}_j2`)}
-                  />
-                  <div className='form-group flex-row items-center gap-2 m-0'>
-                    <input
-                      type='checkbox'
-                      id={`comp_${num}`}
-                      value='true'
-                      className='rounded'
-                      {...regM(`set_${num}_completado`)}
-                    />
-                    <label
-                      htmlFor={`comp_${num}`}
-                      className='text-xs cursor-pointer'
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      Completado
-                    </label>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className='flex flex-wrap gap-2 mt-3'>
-              <button
-                type='button'
-                onClick={addSet}
-                disabled={setNumbers.length >= MAX_SETS}
-                className='btn-secondary text-sm'
-              >
-                <Plus className='w-4 h-4' /> Agregar set
-              </button>
-              {setNumbers.length > 3 && (
-                <button
-                  type='button'
-                  onClick={removeLastSet}
-                  className='btn-secondary text-sm'
-                  style={{ color: '#dc2626' }}
-                >
-                  <Trash2 className='w-4 h-4' /> Quitar último set
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </Modal>
+        register={regM}
+        estados={ESTADOS}
+        setNumbers={setNumbers}
+        addSet={addSet}
+        removeLastSet={removeLastSet}
+        maxSets={MAX_SETS}
+      />
 
       {/* Filtros y Búsqueda */}
       <div className='card p-4 space-y-3'>
@@ -2725,122 +2615,3 @@ function getParticipantNames(partido) {
   return [getParticipantName(partido, 1), getParticipantName(partido, 2)]
 }
 
-// Controlled selects retain reset values while their asynchronous options arrive.
-function FormSelect({ control, name, rules, children, ...props }) {
-  return (
-    <Controller
-      control={control}
-      name={name}
-      rules={rules}
-      render={({ field }) => (
-        <select {...props} {...field} value={field.value ?? ''}>
-          {children}
-        </select>
-      )}
-    />
-  )
-}
-
-function ParticipantSelector({
-  label,
-  mode,
-  modeField,
-  fixedField,
-  sourceField,
-  fixedLabel,
-  fixedOptions,
-  sourceMatches,
-  control,
-  disabled = false,
-  error,
-}) {
-  const [query, setQuery] = useState('')
-  const values = useWatch({ control })
-  const otherSide = fixedField.includes('1') ? '2' : '1'
-  const opposite = fixedField.replace(/[12]/, otherSide)
-  const context = `${values.torneo_id}-${values.categoria_id}-${values.grupo}-${values.fase}-${values[fixedField] || ''}`
-  useEffect(() => {
-    setQuery('')
-  }, [context])
-  const visibleOptions = fixedOptions.filter(
-    (option) =>
-      !(
-        values[`participante${otherSide}_tipo`] !== 'ganador' &&
-        String(option.id) === String(values[opposite])
-      ) &&
-      (String(option.id) === String(values[fixedField]) ||
-        matchesSearch(option.search || option.label, query))
-  )
-  return (
-    <div className='form-group'>
-      <label className='form-label'>{label}</label>
-      <FormSelect className='form-input' control={control} name={modeField}>
-        <option value='fijo'>{fixedLabel} definido</option>
-        <option value='ganador' disabled={!sourceMatches.length}>
-          Ganador de otro partido
-        </option>
-        {values.fase === 'eliminacion' && (
-          <option value='por_definir'>{fixedLabel} por definir (pendiente en llave)</option>
-        )}
-      </FormSelect>
-
-      {mode === 'por_definir' ? (
-        <p className='text-xs' style={{ color: 'var(--text-muted)' }}>
-          Este lado quedará como «Por definir» hasta que se asigne la pareja/jugador o clasifique de otra llave.
-        </p>
-      ) : mode === 'ganador' ? (
-        <>
-          <FormSelect
-            key={sourceField}
-            control={control}
-            name={sourceField}
-            className='form-input'
-            rules={{ required: 'Selecciona el partido de origen' }}
-          >
-            <option value=''>Seleccionar partido</option>
-            {sourceMatches.map((match) => (
-              <option key={match.id} value={match.id}>
-                Gdor: {getMatchupLabel(match)}
-              </option>
-            ))}
-          </FormSelect>
-          {sourceMatches.length === 0 && (
-            <p className='text-xs' style={{ color: 'var(--text-muted)' }}>
-              Primero crea otro partido de la misma categoría.
-            </p>
-          )}
-        </>
-      ) : (
-        <>
-          <input
-            className='form-input'
-            aria-label={`Buscar ${label.toLowerCase()}`}
-            placeholder='Buscar por nombre o apellido…'
-            value={query}
-            disabled={disabled}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <FormSelect
-            key={fixedField}
-            control={control}
-            name={fixedField}
-            disabled={disabled}
-            className='form-input'
-            rules={{ required: `Selecciona un ${fixedLabel.toLowerCase()}` }}
-          >
-            <option value=''>Seleccionar</option>
-            {visibleOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </FormSelect>
-          {!visibleOptions.length && (
-            <p className='text-xs'>No hay participantes disponibles para esta selección.</p>
-          )}
-        </>
-      )}
-      {error && <p className='form-error'>{error.message}</p>}
-    </div>
-  )
-}

@@ -1,4 +1,5 @@
 const db = require('../../config/db')
+const gruposService = require('../torneos/grupos.service')
 
 // ── Get standings for a tournament ──────
 exports.getByTorneo = async (torneoId) => {
@@ -28,7 +29,7 @@ exports.getByTorneo = async (torneoId) => {
   )
 
   const authoritative = isDoubles && torneo.sistema === 'grupos_eliminacion'
-  const structure = authoritative ? await require('../torneos/grupos.service').get(torneoId) : null
+  const structure = authoritative ? await gruposService.get(torneoId) : null
   const assignment = new Map((structure?.parejas || []).map((p) => [Number(p.equipo_id), p]))
   const [categoryRows] = authoritative ? await db.query('SELECT id,nombre FROM categorias') : [[]]
   const catNames = new Map(categoryRows.map((c) => [Number(c.id), c.nombre]))
@@ -39,7 +40,7 @@ exports.getByTorneo = async (torneoId) => {
     !authoritative ||
     (!invalidIds.has(Number(p.id)) &&
       p.fase === 'grupos' &&
-      (require('../torneos/grupos.service').isCompatible(
+      (gruposService.isCompatible(
         { ...p, equipo1_id: p.p1_id, equipo2_id: p.p2_id },
         assignment
       ) ||

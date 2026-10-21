@@ -2,6 +2,11 @@ const db = require('../../config/db')
 const { buildCorrection } = require('./score-correction')
 const { createInitialState, projectSets, serializeState } = require('./score.engine')
 const { revisionOf, configurationOf } = require('./eventDelivery')
+const schedulingService = require('./scheduling.service')
+const scheduleNotifications = require('./schedule-notifications')
+const matchesService = require('./matches.service')
+const gruposService = require('../torneos/grupos.service')
+const retirosService = require('../torneos/retiros.service')
 
 const fail = (status, message) => {
   throw { status, message }
@@ -16,7 +21,7 @@ async function change(id, user, body, action, work) {
   const connection = await db.getConnection()
   let scheduleLocked = false
   try {
-    await require('./scheduling.service').lock(connection); scheduleLocked = true
+    await schedulingService.lock(connection); scheduleLocked = true
     await connection.beginTransaction()
     const [[target]] = await connection.query('SELECT torneo_id FROM partidos WHERE id=?', [id])
     if (target?.torneo_id)
@@ -32,7 +37,7 @@ async function change(id, user, body, action, work) {
         'Otro oficial modificó este partido. Actualiza la información y vuelve a intentarlo.'
       )
     const details = await work(connection, match)
-    await require('./schedule-notifications').afterChange(connection, match)
+    await scheduleNotifications.afterChange(connection, match)
     await connection.query(
       'UPDATE partidos SET control_version = control_version + 1 WHERE id = ?',
       [id]
@@ -46,10 +51,10 @@ async function change(id, user, body, action, work) {
     await connection.rollback()
     throw error
   } finally {
-    if (scheduleLocked) await require('./scheduling.service').unlock(connection)
+    if (scheduleLocked) await schedulingService.unlock(connection)
     connection.release()
   }
-  return require('./matches.service').getById(id)
+  return matchesService.getById(id)
 }
 
 exports.reassignCourt = (id, body, user) =>
@@ -77,7 +82,7 @@ exports.reassignCourt = (id, body, user) =>
         [courtId, id, match.estado, match.fecha_inicio, match.hora_inicio])
       if (occupied.length) fail(409, 'La cancha ya tiene otro partido en vivo o en el mismo horario')
     }
-    await require('./scheduling.service').assertAvailable({ ...match, cancha_id: courtId }, conn)
+    await schedulingService.assertAvailable({ ...match, cancha_id: courtId }, conn)
     await conn.query('UPDATE partidos SET cancha_id = ? WHERE id = ?', [courtId, id])
     return { anterior: match.cancha_id, nuevo: courtId }
   })
@@ -96,7 +101,7 @@ exports.reassignJudge = (id, body, user) =>
       )
       if (!judges.length) fail(400, 'El juez seleccionado no está disponible')
     }
-    await require('./scheduling.service').assertAvailable({ ...match, juez_id: judgeId }, conn)
+    await schedulingService.assertAvailable({ ...match, juez_id: judgeId }, conn)
     await conn.query('UPDATE partidos SET juez_id = ? WHERE id = ?', [judgeId, id])
     return { anterior: match.juez_id, nuevo: judgeId }
   })
@@ -131,14 +136,14 @@ exports.reactivateMatch = (id, body, user) =>
     )
     if (latest[0] && parse(latest[0].marcador_despues)?.winner)
       fail(409, 'El historial ya tiene un ganador. Revisa el resultado antes de reactivar.')
-    await require('../torneos/grupos.service').validateMatch(match, conn)
+    await gruposService.validateMatch(match, conn)
     const [live] = await conn.query(
       'SELECT iniciado_at FROM estado_en_vivo_partido WHERE partido_id = ? LIMIT 1',
       [id]
     )
     const started = Boolean(live[0]?.iniciado_at)
-    await require('../torneos/retiros.service').assertAvailable(match, conn)
-    await require('./scheduling.service').assertAvailable({ ...match, estado: started ? 'en_vivo' : 'programado' }, conn)
+    await retirosService.assertAvailable(match, conn)
+    await schedulingService.assertAvailable({ ...match, estado: started ? 'en_vivo' : 'programado' }, conn)
     await conn.query(
       `UPDATE estado_en_vivo_partido SET finalizado_at = NULL,
     pausado_at = IF(iniciado_at IS NULL, NULL, COALESCE(pausado_at, NOW())) WHERE partido_id = ?`,
@@ -223,7 +228,7 @@ exports.correctScore = (id, body, user) =>
         ]
       )
     }
-    await require('./scheduling.service').assertAvailable({ ...match, estado: body.estado }, conn)
+    await schedulingService.assertAvailable({ ...match, estado: body.estado }, conn)
     await conn.query('UPDATE partidos SET estado = ?, ganador = ? WHERE id = ?', [
       body.estado,
       state.winner,
@@ -241,7 +246,7 @@ exports.correctScore = (id, body, user) =>
       let participant = state.winner
         ? match[`${type}${state.winner === 'jugador1' ? 1 : 2}_id`]
         : null
-      participant = await require('../torneos/retiros.service').eligibleWinner(match, type, participant, conn)
+      participant = await retirosService.eligibleWinner(match, type, participant, conn)
       for (const side of [1, 2])
         await conn.query(
           `UPDATE partidos SET ${type}${side}_id = ?, control_version = control_version + 1 WHERE origen_partido${side}_id = ?`,
@@ -288,7 +293,7 @@ exports.substitute = (id, body, user) =>
       fail(400, 'Selecciona un lado y un participante registrado')
     const type = doubles ? 'equipo' : 'jugador'
     const field = `${type}${side}_id`
-    await require('../torneos/retiros.service').assertAvailable({ ...match, [field]: newId }, conn, match)
+    await retirosService.assertAvailable({ ...match, [field]: newId }, conn, match)
     const other = match[`${type}${side === 1 ? 2 : 1}_id`]
     if (Number(other) === newId || Number(match[field]) === newId)
       fail(400, 'Elige un participante distinto a los dos actuales')
@@ -299,7 +304,7 @@ exports.substitute = (id, body, user) =>
       )
     const grouped =
       doubles &&
-      (await require('../torneos/grupos.service').validateMatch(
+      (await gruposService.validateMatch(
         { ...match, [field]: newId, [`origen_partido${side}_id`]: null },
         conn
       ))
@@ -338,7 +343,7 @@ exports.substitute = (id, body, user) =>
       )
         fail(400, 'Un jugador no puede participar en ambos lados del partido')
     }
-    await require('./scheduling.service').assertAvailable({ ...match, [field]: newId }, conn)
+    await schedulingService.assertAvailable({ ...match, [field]: newId }, conn)
     await conn.query(
       `UPDATE partidos SET ${field} = ?, nombre_override_j${side} = NULL, nombre_override = NULL, origen_partido${side}_id = NULL WHERE id = ?`,
       [newId, id]

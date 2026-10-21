@@ -139,12 +139,7 @@ app.use((req, res) => {
   return res.sendFile(path.join(frontendDist, 'index.html'))
 })
 
-app.use((error, _req, res, _next) => {
-  console.error('[ERROR]', error)
-  res
-    .status(error.status || error.statusCode || 500)
-    .json({ ok: false, message: error.message || 'Error interno del servidor' })
-})
+app.use(require('./src/middlewares/error.middleware'))
 
 const port = process.env.PORT || 3001
 
